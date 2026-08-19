@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auto OAuth</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Auto OAuth</h1>
+    </header>
+    <form id="oauth-form">
+      <div class="openai-auth-group">
+        <section class="openai-account openai-account-first">
+          <h2>OpenAI 登录</h2>
+          <label>账号信息
+            <textarea id="openai-account-bundle" rows="3" spellcheck="false" placeholder="邮箱----密码----https://2fa.example/..."></textarea>
+            <div class="field-actions">
+              <button id="parse-account" class="secondary" type="button">解析账号信息</button>
+            </div>
+          </label>
+          <label>邮箱（可选）<input id="openai-email" type="email" autocomplete="username"></label>
+          <label>密码（可选）<input id="openai-password" type="password" autocomplete="current-password"></label>
+        </section>
+        <section class="one-time-code">
+          <h2>一次性验证码</h2>
+          <div id="two-factor-link-wrap" class="two-factor-link" hidden>
+            <a id="two-factor-link" href="#" target="_blank" rel="noopener noreferrer">打开 2FA 验证码地址</a>
+          </div>
+          <input id="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="粘贴邮箱或短信验证码">
+        </section>
+      </div>
+      <section class="cpa-config">
+        <h2>CPA</h2>
+        <label>CPA 地址<input id="cpa-url" type="url" placeholder="https://host/management.html" autocomplete="url"></label>
+        <label>CPA 管理密钥<input id="cpa-key" type="password" autocomplete="off"></label>
+      </section>
+      <section class="sub2api-config">
+        <h2>SUB2API</h2>
+        <label>SUB2API 地址<input id="sub2api-url" type="url" placeholder="https://host/admin/accounts" autocomplete="url"></label>
+        <label>管理员邮箱<input id="sub2api-email" type="email" autocomplete="username"></label>
+        <label>管理员密码<input id="sub2api-password" type="password" autocomplete="current-password"></label>
+        <label>目标分组<input id="sub2api-group" type="text" value="codex" placeholder="codex，可用逗号分隔多个分组"></label>
+        <label>默认代理（可选）<input id="sub2api-proxy" type="text" placeholder="SUB2API 中的代理名称"></label>
+        <label>账号优先级<input id="sub2api-priority" type="number" min="1" step="1" value="1"></label>
+        <label>账号名称（可选）<input id="sub2api-account-name" type="text" placeholder="留空时使用添加日期 YYYY-MM-DD"></label>
+        <p>CPA 任一字段有值时优先使用 CPA；使用 SUB2API 时请清空 CPA 字段。</p>
+      </section>
+      <div id="status" class="status status-idle" role="status">等待开始授权。</div>
+      <div class="actions">
+        <button id="clear-status" class="secondary" type="button">清除状态</button>
+        <button id="start" class="primary" type="submit">开始授权</button>
+      </div>
+    </form>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

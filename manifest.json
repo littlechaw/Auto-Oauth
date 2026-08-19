@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Auto OAuth",
+  "version": "1.0.0",
+  "description": "为 CPA 或 SUB2API 完成已有 OpenAI 账号的 OAuth 授权。",
+  "permissions": ["storage", "tabs", "webNavigation", "sidePanel"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Auto OAuth"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://auth0.openai.com/*",
+        "https://auth.openai.com/*",
+        "https://accounts.openai.com/*"
+      ],
+      "js": ["oauth-content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

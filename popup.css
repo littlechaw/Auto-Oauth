@@ -1,0 +1,33 @@
+:root { color-scheme: dark; --bg: #121720; --panel: #1b2330; --line: #344154; --text: #edf2f8; --muted: #aab7c7; --blue: #44a3ff; --red: #ff7777; --green: #72d59a; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { padding: 16px; }
+header { margin-bottom: 14px; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 18px; font-weight: 650; }
+header p, .openai-account p { color: var(--muted); line-height: 1.45; margin-top: 5px; }
+h2 { font-size: 13px; margin-bottom: 10px; }
+section { display: grid; gap: 10px; }
+.openai-auth-group { display: grid; gap: 0; }
+label { display: grid; gap: 5px; color: var(--muted); font-weight: 600; }
+input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; background: var(--panel); color: var(--text); outline: none; }
+input:focus, textarea:focus { border-color: var(--blue); }
+textarea { resize: vertical; font: inherit; line-height: 1.4; }
+.field-actions { display: flex; justify-content: flex-end; }
+.two-factor-link { margin-top: -3px; }
+.two-factor-link a { color: var(--blue); text-decoration: underline; }
+.cpa-config, .sub2api-config, .openai-account { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.openai-account-first { margin-top: 0; padding-top: 0; border-top: 0; }
+.one-time-code { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; }
+.check input { width: auto; }
+.status { margin-top: 15px; border-left: 3px solid var(--muted); padding: 9px 10px; background: var(--panel); line-height: 1.4; }
+.status-working, .status-waiting { border-left-color: var(--blue); }
+.status-success { border-left-color: var(--green); }
+.status-error { border-left-color: var(--red); color: #ffc1c1; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+button { border: 0; border-radius: 5px; padding: 9px 12px; color: var(--text); cursor: pointer; font-weight: 650; }
+.primary { background: #1976d2; }
+.primary:hover { background: #2688e5; }
+.secondary { background: #303c4f; }
+button:disabled { opacity: .6; cursor: wait; }
