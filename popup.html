@@ -22,12 +22,13 @@
             </div>
           </label>
           <label>邮箱（可选）<input id="openai-email" type="email" autocomplete="username"></label>
-          <label>密码（可选）<input id="openai-password" type="password" autocomplete="current-password"></label>
+          <label>密码（可选）<input id="openai-password" type="text" autocomplete="current-password"></label>
         </section>
         <section class="one-time-code">
           <h2>一次性验证码</h2>
-          <div id="two-factor-link-wrap" class="two-factor-link" hidden>
-            <a id="two-factor-link" href="#" target="_blank" rel="noopener noreferrer">打开 2FA 验证码地址</a>
+          <div class="two-factor-url-field">
+            <input id="two-factor-url" type="url" placeholder="2FA 验证码地址" autocomplete="url" aria-label="2FA 验证码地址">
+            <button id="open-two-factor-url" class="secondary" type="button" disabled>访问</button>
           </div>
           <input id="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="粘贴邮箱或短信验证码">
         </section>

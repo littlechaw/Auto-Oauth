@@ -14,8 +14,9 @@ input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px
 input:focus, textarea:focus { border-color: var(--blue); }
 textarea { resize: vertical; font: inherit; line-height: 1.4; }
 .field-actions { display: flex; justify-content: flex-end; }
-.two-factor-link { margin-top: -3px; }
-.two-factor-link a { color: var(--blue); text-decoration: underline; }
+.two-factor-url-field { display: flex; gap: 8px; }
+.two-factor-url-field input { min-width: 0; }
+.two-factor-url-field button { flex: 0 0 auto; }
 .cpa-config, .sub2api-config, .openai-account { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .openai-account-first { margin-top: 0; padding-top: 0; border-top: 0; }
 .one-time-code { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }

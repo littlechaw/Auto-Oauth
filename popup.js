@@ -31,67 +31,51 @@ function parseOpenAiAccountBundle(rawValue) {
   const separator = raw.match(/([^\w\s])\1{1,}/)?.[0];
   if (!separator) return null;
 
-  const parts = raw.split(separator).map((part) => part.trim()).filter(Boolean);
-  const emailIndex = parts.findIndex((part) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part));
-  if (emailIndex < 0 || !parts[emailIndex + 1]) return null;
+  const [email, password, twoFactorAddress = ''] = raw.split(separator).map((part) => part.trim());
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password === undefined) return null;
 
   return {
-    email: parts[emailIndex],
-    password: parts[emailIndex + 1],
-    twoFactorUrl: findHttpsUrl(parts.slice(emailIndex + 2).join(separator)),
+    email,
+    password,
+    twoFactorUrl: isHttpsUrl(twoFactorAddress) ? twoFactorAddress : '',
   };
 }
 
-function findHttpsUrl(rawValue) {
-  const raw = String(rawValue || '').trim();
-  const separator = raw.match(/([^\w\s])\1{1,}/)?.[0];
-  const parts = separator ? raw.split(separator) : [raw];
-  const isolatedUrl = parts
-    .map((part) => part.trim().match(/^https:\/\/[^\s]+$/i)?.[0] || '')
-    .find(Boolean);
-  return isolatedUrl || raw.match(/https:\/\/[^\s<>'"]+/i)?.[0] || '';
-}
-
-let openedTwoFactorUrl = '';
-
-function renderTwoFactorLink(url = '') {
-  const link = $('two-factor-link');
-  const wrap = $('two-factor-link-wrap');
-  if (!url) {
-    link.removeAttribute('data-url');
-    link.href = '#';
-    wrap.hidden = true;
-    return;
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
   }
-  link.dataset.url = url;
-  link.href = url;
-  wrap.hidden = false;
 }
 
-async function openTwoFactorUrl(url, force = false) {
-  if (!url || (!force && url === openedTwoFactorUrl)) return;
+function setTwoFactorUrl(url = '') {
+  const input = $('two-factor-url');
+  const openButton = $('open-two-factor-url');
+  input.value = url;
+  openButton.disabled = !url;
+}
+
+async function openTwoFactorUrl(url) {
+  if (!url) return;
   const result = await chrome.runtime.sendMessage({
     type: 'OPEN_TWO_FACTOR_URL',
     payload: { url },
   });
   if (result?.error) throw new Error(result.error);
-  openedTwoFactorUrl = url;
 }
 
 async function applyOpenAiAccountBundle(manual = false) {
-  const rawBundle = $('openai-account-bundle').value;
-  renderTwoFactorLink(findHttpsUrl(rawBundle));
-  const bundle = parseOpenAiAccountBundle(rawBundle);
+  const bundle = parseOpenAiAccountBundle($('openai-account-bundle').value);
   if (!bundle) {
+    setTwoFactorUrl();
     if (manual) throw new Error('未识别到有效的邮箱和密码格式。');
     return;
   }
-  renderTwoFactorLink(bundle.twoFactorUrl);
+  setTwoFactorUrl(bundle.twoFactorUrl);
   fields.openaiEmail.value = bundle.email;
   fields.openaiPassword.value = bundle.password;
   await saveConfig();
-
-  await openTwoFactorUrl(bundle.twoFactorUrl, manual);
 }
 
 async function refresh() {
@@ -100,7 +84,7 @@ async function refresh() {
   const bundleStorage = await chrome.storage.session.get(ACCOUNT_BUNDLE_SESSION_KEY);
   const savedBundle = String(bundleStorage[ACCOUNT_BUNDLE_SESSION_KEY] || '');
   if (savedBundle && !$('openai-account-bundle').value) $('openai-account-bundle').value = savedBundle;
-  renderTwoFactorLink(findHttpsUrl($('openai-account-bundle').value));
+  setTwoFactorUrl(parseOpenAiAccountBundle($('openai-account-bundle').value)?.twoFactorUrl);
   if (!state.run && state.status?.type !== 'idle') {
     await chrome.runtime.sendMessage({ type: 'CLEAR_STATUS' });
     renderStatus({ type: 'idle', message: '等待开始授权。' });
@@ -139,7 +123,7 @@ $('openai-account-bundle').addEventListener('input', () => {
   const value = $('openai-account-bundle').value;
   if (value) chrome.storage.session.set({ [ACCOUNT_BUNDLE_SESSION_KEY]: value });
   else chrome.storage.session.remove(ACCOUNT_BUNDLE_SESSION_KEY);
-  renderTwoFactorLink(findHttpsUrl(value));
+  setTwoFactorUrl(parseOpenAiAccountBundle(value)?.twoFactorUrl);
 });
 
 $('parse-account').addEventListener('click', () => {
@@ -148,9 +132,12 @@ $('parse-account').addEventListener('click', () => {
   });
 });
 
-$('two-factor-link').addEventListener('click', (event) => {
-  event.preventDefault();
-  openTwoFactorUrl(event.currentTarget.dataset.url, true).catch((error) => {
+$('two-factor-url').addEventListener('input', () => {
+  $('open-two-factor-url').disabled = !$('two-factor-url').value.trim();
+});
+
+$('open-two-factor-url').addEventListener('click', () => {
+  openTwoFactorUrl($('two-factor-url').value.trim()).catch((error) => {
     renderStatus({ type: 'error', message: error.message || '无法打开 2FA 地址。' });
   });
 });
