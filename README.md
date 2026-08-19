@@ -1,6 +1,6 @@
 # Auto OAuth
 
-独立的 Chrome OAuth 授权扩展，只处理已有 OpenAI 账号的授权，不包含账号注册、验证码收取、接码、邮箱或批量任务。
+独立的 Chrome OAuth 授权扩展，只处理已有 OpenAI 账号的授权
 
 ## 使用
 
