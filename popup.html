@@ -47,12 +47,13 @@
         <label>默认代理（可选）<input id="sub2api-proxy" type="text" placeholder="SUB2API 中的代理名称"></label>
         <label>账号优先级<input id="sub2api-priority" type="number" min="1" step="1" value="1"></label>
         <label>账号名称（可选）<input id="sub2api-account-name" type="text" placeholder="留空时使用添加日期 YYYY-MM-DD"></label>
-        <p>CPA 任一字段有值时优先使用 CPA；使用 SUB2API 时请清空 CPA 字段。</p>
+        <p>CPA 和 SUB2API 配置可同时保留，请使用对应按钮发起授权。</p>
       </section>
       <div id="status" class="status status-idle" role="status">等待开始授权。</div>
       <div class="actions">
         <button id="clear-status" class="secondary" type="button">清除状态</button>
-        <button id="start" class="primary" type="submit">开始授权</button>
+        <button id="start-cpa" class="primary" type="button">授权 CPA</button>
+        <button id="start-sub" class="primary" type="button">授权 SUB</button>
       </div>
     </form>
   </main>

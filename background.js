@@ -230,20 +230,8 @@ async function requestSub2ApiAuthUrl(config) {
   };
 }
 
-function resolveAuthorizationTarget(config) {
-  const hasCpaConfig = Boolean(clean(config.cpaUrl) || clean(config.cpaManagementKey));
-  if (hasCpaConfig) return 'cpa';
-
-  const hasSub2ApiConfig = Boolean(
-    clean(config.sub2apiUrl)
-    || clean(config.sub2apiEmail)
-    || String(config.sub2apiPassword || '')
-  );
-  if (hasSub2ApiConfig) return 'sub2api';
-  throw new Error('请填写 CPA 或 SUB2API 配置后再开始授权。');
-}
-
-async function startAuthorization() {
+async function startAuthorization(target) {
+  if (!['cpa', 'sub2api'].includes(target)) throw new Error('请选择 CPA 或 SUB 授权。');
   const [config, activeTabs, pendingStorage] = await Promise.all([
     getConfig(),
     chrome.tabs.query({ active: true, lastFocusedWindow: true }),
@@ -260,8 +248,8 @@ async function startAuthorization() {
   const pendingTwoFactorTabIds = Array.isArray(pendingStorage[TWO_FACTOR_TAB_IDS_KEY])
     ? pendingStorage[TWO_FACTOR_TAB_IDS_KEY].filter((id) => Number.isInteger(id))
     : [];
-  await setStatus('working', '正在请求 OAuth 授权地址...');
-  const target = resolveAuthorizationTarget(config);
+  const targetName = target === 'cpa' ? 'CPA' : 'SUB';
+  await setStatus('working', `正在请求 ${targetName} OAuth 授权地址...`);
   const auth = target === 'cpa' ? await requestCpaAuthUrl(config) : await requestSub2ApiAuthUrl(config);
   const tab = await chrome.tabs.create({ url: auth.authUrl, active: true });
   const latestPending = await chrome.storage.local.get(TWO_FACTOR_TAB_IDS_KEY);
@@ -286,7 +274,7 @@ async function startAuthorization() {
     [TWO_FACTOR_TAB_IDS_KEY]: [],
     [PENDING_ORIGIN_TAB_KEY]: null,
   });
-  await setStatus('waiting', '授权处理中。', { target });
+  await setStatus('waiting', `${targetName} 授权处理中。`, { target });
   schedulePageAutomation(tab.id);
   return { run };
 }
@@ -439,7 +427,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return { ok: true };
       }
       case 'START_AUTHORIZATION':
-        return await startAuthorization();
+        return await startAuthorization(message.payload?.target);
       case 'OPEN_TWO_FACTOR_URL': {
         const url = String(message.payload?.url || '').trim();
         let parsed;
@@ -486,11 +474,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       case 'GET_PENDING_ONE_TIME_CODE': {
         const stored = await chrome.storage.session.get(ONE_TIME_CODE_KEY);
-        return { code: String(stored[ONE_TIME_CODE_KEY] || '') };
+        const pendingCode = stored[ONE_TIME_CODE_KEY];
+        return { code: typeof pendingCode === 'string' ? pendingCode : '' };
       }
-      case 'CONSUME_ONE_TIME_CODE':
-        await chrome.storage.session.remove(ONE_TIME_CODE_KEY);
+      case 'CONSUME_ONE_TIME_CODE': {
+        const submittedCode = String(message.payload?.code || '').replace(/\s+/g, '');
+        const stored = await chrome.storage.session.get(ONE_TIME_CODE_KEY);
+        const pendingCode = String(stored[ONE_TIME_CODE_KEY] || '').replace(/\s+/g, '');
+        if (submittedCode && pendingCode === submittedCode) {
+          await chrome.storage.session.set({ [ONE_TIME_CODE_KEY]: { code: submittedCode, consumed: true } });
+        }
         return { ok: true };
+      }
+      case 'REJECT_ONE_TIME_CODE': {
+        const code = String(message.payload?.code || '').replace(/\s+/g, '');
+        const reason = clean(message.payload?.reason) || '验证码未通过或页面未继续，请修改后重新填写。';
+        const stored = await chrome.storage.session.get(ONE_TIME_CODE_KEY);
+        const pendingCode = stored[ONE_TIME_CODE_KEY];
+        if (code && pendingCode?.consumed && pendingCode.code === code) {
+          await chrome.storage.session.remove(ONE_TIME_CODE_KEY);
+          await setStatus('error', reason, { oneTimeCodeRejected: true });
+          return { cleared: true };
+        }
+        return { cleared: false };
+      }
       case 'CLEAR_STATUS':
         await setStatus('idle', '等待开始授权。');
         return { ok: true };

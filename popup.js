@@ -28,15 +28,25 @@ async function saveConfig() {
 
 function parseOpenAiAccountBundle(rawValue) {
   const raw = String(rawValue || '').trim();
+  const labeledMatch = raw.match(/(?:电子邮件|邮件|邮箱|e-?mail)\s*[:：]\s*(\S+)\s+(?:密码|password|pass)\s*[:：]\s*(\S+)/i);
+  if (labeledMatch) return createOpenAiAccountBundle(labeledMatch[1], labeledMatch[2]);
+
   const separator = raw.match(/([^\w\s])\1{1,}/)?.[0];
   if (!separator) return null;
 
   const [email, password, twoFactorAddress = ''] = raw.split(separator).map((part) => part.trim());
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password === undefined) return null;
+  return createOpenAiAccountBundle(email, password, twoFactorAddress);
+}
+
+function createOpenAiAccountBundle(email, password, twoFactorAddress = '') {
+  // 兼容聊天记录或文档中为避免被识别而写成的 \@ 邮箱形式。
+  const normalizedEmail = String(email || '').trim().replace(/\\@/g, '@');
+  const normalizedPassword = String(password || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || !normalizedPassword) return null;
 
   return {
-    email,
-    password,
+    email: normalizedEmail,
+    password: normalizedPassword,
     twoFactorUrl: isHttpsUrl(twoFactorAddress) ? twoFactorAddress : '',
   };
 }
@@ -95,24 +105,29 @@ async function refresh() {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes.autoOauthStatus?.newValue) return;
-  renderStatus(changes.autoOauthStatus.newValue);
+  const status = changes.autoOauthStatus.newValue;
+  if (status.oneTimeCodeRejected) $('one-time-code').value = '';
+  renderStatus(status);
 });
 
-$('oauth-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const start = $('start');
-  start.disabled = true;
+async function startAuthorization(target) {
+  const buttons = [$('start-cpa'), $('start-sub')];
+  buttons.forEach((button) => { button.disabled = true; });
+  const targetName = target === 'cpa' ? 'CPA' : 'SUB';
   try {
     await saveConfig();
-    const result = await chrome.runtime.sendMessage({ type: 'START_AUTHORIZATION' });
+    const result = await chrome.runtime.sendMessage({ type: 'START_AUTHORIZATION', payload: { target } });
     if (result?.error) throw new Error(result.error);
-    renderStatus({ type: 'waiting', message: '授权处理中。' });
+    renderStatus({ type: 'waiting', message: `${targetName} 授权处理中。` });
   } catch (error) {
-    renderStatus({ type: 'error', message: error.message || '无法开始授权。' });
+    renderStatus({ type: 'error', message: error.message || `无法开始 ${targetName} 授权。` });
   } finally {
-    start.disabled = false;
+    buttons.forEach((button) => { button.disabled = false; });
   }
-});
+}
+
+$('start-cpa').addEventListener('click', () => startAuthorization('cpa'));
+$('start-sub').addEventListener('click', () => startAuthorization('sub2api'));
 
 $('clear-status').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'CLEAR_STATUS' });

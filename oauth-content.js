@@ -64,6 +64,50 @@
   };
 
   let codeFillInFlight = false;
+  let oneTimeCodeAttempt = 0;
+
+  const clearOneTimeCodeInputs = () => {
+    findOneTimeCodeInputs().forEach((input) => setValue(input, ''));
+  };
+
+  const hasRedColor = (value) => [...String(value || '').matchAll(/rgba?\(\s*(\d+)\s*[, ]\s*(\d+)\s*[, ]\s*(\d+)/gi)].some(([, red, green, blue]) => {
+    const [r, g, b] = [red, green, blue].map(Number);
+    return r >= 140 && r >= g * 1.4 && r >= b * 1.4;
+  });
+
+  const hasOneTimeCodeErrorStyle = (input) => {
+    const style = getComputedStyle(input);
+    return [
+      style.color,
+      style.backgroundColor,
+      style.borderTopColor,
+      style.borderRightColor,
+      style.borderBottomColor,
+      style.borderLeftColor,
+      style.outlineColor,
+      style.boxShadow,
+    ].some(hasRedColor);
+  };
+
+  const clearRejectedOneTimeCode = async (code, attempt) => {
+    const timeoutAt = Date.now() + 4000;
+    let reason = '验证码未通过或页面未继续，请修改后重新填写。';
+    while (attempt === oneTimeCodeAttempt) {
+      const inputs = findOneTimeCodeInputs();
+      if (!inputs.length) return;
+      if (inputs.some(hasOneTimeCodeErrorStyle)) {
+        reason = '验证码输入框显示错误，请修改后重新填写。';
+        break;
+      }
+      if (Date.now() >= timeoutAt) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (attempt !== oneTimeCodeAttempt) return;
+    const response = await chrome.runtime.sendMessage({ type: 'REJECT_ONE_TIME_CODE', payload: { code, reason } });
+    if (!response?.cleared) return;
+    clearOneTimeCodeInputs();
+    oneTimeCodeAttempt += 1;
+  };
 
   const fillPendingOneTimeCode = async () => {
     if (codeFillInFlight || !findOneTimeCodeInputs().length) return false;
@@ -73,7 +117,9 @@
       if (!response?.code) return false;
       const result = fillOneTimeCode(response.code);
       if (!result.ok) return false;
-      await chrome.runtime.sendMessage({ type: 'CONSUME_ONE_TIME_CODE' });
+      await chrome.runtime.sendMessage({ type: 'CONSUME_ONE_TIME_CODE', payload: { code: response.code } });
+      const attempt = ++oneTimeCodeAttempt;
+      clearRejectedOneTimeCode(response.code, attempt).catch(() => {});
       return true;
     } finally {
       codeFillInFlight = false;
@@ -113,6 +159,11 @@
       attempts += 1;
       try {
         if (await fillPendingOneTimeCode()) {
+          clearInterval(timer);
+          document.documentElement.removeAttribute(RUN_MARK);
+          return;
+        }
+        if (findOneTimeCodeInputs().length) {
           clearInterval(timer);
           document.documentElement.removeAttribute(RUN_MARK);
           return;
