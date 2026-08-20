@@ -59,7 +59,8 @@ function isHttpsUrl(value) {
   }
 }
 
-function setTwoFactorUrl(url = '') {
+function setTwoFactorUrl(url) {
+  if (!url) return;
   const input = $('two-factor-url');
   const openButton = $('open-two-factor-url');
   input.value = url;
@@ -78,7 +79,6 @@ async function openTwoFactorUrl(url) {
 async function applyOpenAiAccountBundle(manual = false) {
   const bundle = parseOpenAiAccountBundle($('openai-account-bundle').value);
   if (!bundle) {
-    setTwoFactorUrl();
     if (manual) throw new Error('未识别到有效的邮箱和密码格式。');
     return;
   }
