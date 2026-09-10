@@ -1,6 +1,7 @@
 const CONFIG_KEY = 'autoOauthConfig';
 const RUN_KEY = 'autoOauthRun';
 const STATUS_KEY = 'autoOauthStatus';
+const CPA_PENDING_PATCH_KEY = 'autoOauthCpaPendingPatch';
 const ONE_TIME_CODE_KEY = 'autoOauthPendingOneTimeCode';
 const TWO_FACTOR_TAB_IDS_KEY = 'autoOauthPendingTwoFactorTabIds';
 const PENDING_ORIGIN_TAB_KEY = 'autoOauthPendingOriginTab';
@@ -13,6 +14,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error
 const DEFAULT_CONFIG = Object.freeze({
   cpaUrl: '',
   cpaManagementKey: '',
+  cpaAdminKey: '',
   sub2apiUrl: '',
   sub2apiEmail: '',
   sub2apiPassword: '',
@@ -311,6 +313,14 @@ async function submitCpaCallback(config, run, callback) {
     },
     body: { provider: 'codex', redirect_url: callback.url },
   });
+  // 记录待设置权重的新账号定位信息：授权邮箱 + 服务地址 + 授权开始时间。
+  await chrome.storage.local.set({
+    [CPA_PENDING_PATCH_KEY]: {
+      origin,
+      email: clean(config.openaiEmail),
+      startedAt: run.startedAt || Date.now(),
+    },
+  });
   return clean(result?.message || result?.status_message) || 'CPA 已成功提交 OAuth 回调。';
 }
 
@@ -383,7 +393,7 @@ async function finishAuthorization(callbackUrl, tabId) {
   } catch (error) {
     run.finalizing = false;
     await chrome.storage.local.set({ [RUN_KEY]: run });
-    await setStatus('error', redactError(error, [config.cpaManagementKey, config.sub2apiPassword, config.openaiPassword]));
+    await setStatus('error', redactError(error, [config.cpaManagementKey, config.cpaAdminKey, config.sub2apiPassword, config.openaiPassword]));
   }
 }
 
@@ -413,6 +423,50 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
   if (changeInfo.status === 'complete' || changeInfo.url) schedulePageAutomation(tabId);
 });
+
+// 从 auth-files 列表中筛选本次 CPA 授权的 codex 账号：类型为 codex、
+// 邮箱匹配（可选）、创建时间不早于授权开始时间；返回创建时间最新的一条。
+function selectCpaCodexTarget(files, wantedEmail, startedAt) {
+  const candidates = (Array.isArray(files) ? files : []).filter((entry) => {
+    if (clean(entry?.provider || entry?.type).toLowerCase() !== 'codex') return false;
+    if (wantedEmail && clean(entry?.email).toLowerCase() !== wantedEmail) return false;
+    const createdAt = Date.parse(String(entry?.created_at || ''));
+    return Number.isFinite(createdAt) && createdAt >= Number(startedAt || 0);
+  });
+  if (!candidates.length) return null;
+  candidates.sort((left, right) => Date.parse(String(right?.created_at || '')) - Date.parse(String(left?.created_at || '')));
+  return candidates[0];
+}
+
+// CPA 授权成功后，定位新保存的 codex 账号并调用 auth-files/fields 接口
+// 设置优先级 100、权重 1（CPA 后台保存账号需数秒，轮询等待）。
+async function applyCpaPriorityWeight(pending, config) {
+  // 该接口经由管理面板校验密钥，面板 Admin Key 可能与 CPA 管理密钥不同，
+  // 优先使用面板 Admin Key，留空时回退到 CPA 管理密钥。
+  const adminKey = clean(config.cpaAdminKey) || clean(config.cpaManagementKey);
+  if (!adminKey) throw new Error('面板 Admin Key 或 CPA 管理密钥不存在，请填写后重试。');
+  const origin = pending.origin || normalizeUrl(config.cpaUrl).origin;
+  const headers = {
+    Authorization: `Bearer ${adminKey}`,
+    'X-Management-Key': adminKey,
+  };
+  const wantedEmail = clean(pending.email).toLowerCase();
+  const deadline = Date.now() + 30000;
+  let target = null;
+  while (Date.now() < deadline) {
+    const list = await requestJson(`${origin}/v0/management/auth-files`, { headers });
+    target = selectCpaCodexTarget(list?.files, wantedEmail, pending.startedAt);
+    if (target) break;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  if (!target) throw new Error('未找到本次授权的 codex 账号（可能 CPA 尚未保存完成或邮箱不一致），请稍后重试。');
+  await requestJson(`${origin}/v0/management/auth-files/fields`, {
+    method: 'PATCH',
+    headers,
+    body: { name: target.name, priority: 100, weight: 1 },
+  });
+  return target;
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
@@ -498,6 +552,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         return { cleared: false };
       }
+      case 'REPORT_PHONE_FORM_ERROR': {
+        const errorText = clean(message.payload?.error) || '未知错误';
+        await setStatus('error', `手机号页面出现错误：${errorText}。已暂停自动操作，清除旧号码并填入新号码后将自动继续。`, { phoneNumberRejected: true });
+        return { ok: true };
+      }
+      case 'RESTART_PAGE_AUTOMATION': {
+        const stored = await chrome.storage.local.get(RUN_KEY);
+        const tabId = stored[RUN_KEY]?.tabId;
+        if (Number.isInteger(tabId)) schedulePageAutomation(tabId);
+        return { ok: Number.isInteger(tabId) };
+      }
+      case 'SET_CPA_PRIORITY_WEIGHT': {
+        const [stored, config] = await Promise.all([
+          chrome.storage.local.get(CPA_PENDING_PATCH_KEY),
+          getConfig(),
+        ]);
+        const pending = stored[CPA_PENDING_PATCH_KEY];
+        if (!pending) throw new Error('没有待设置的授权账号，请先完成一次 CPA 授权。');
+        const target = await applyCpaPriorityWeight(pending, config);
+        await chrome.storage.local.remove(CPA_PENDING_PATCH_KEY);
+        await setStatus('success', `已为 CPA 账号 ${target.name} 设置优先级 100、权重 1。`);
+        return { ok: true, name: target.name };
+      }
       case 'CLEAR_STATUS':
         await setStatus('idle', '等待开始授权。');
         return { ok: true };
@@ -506,7 +583,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
   })().then(sendResponse).catch(async (error) => {
     const config = await getConfig();
-    const messageText = redactError(error, [config.cpaManagementKey, config.sub2apiPassword, config.openaiPassword]);
+    const messageText = redactError(error, [config.cpaManagementKey, config.cpaAdminKey, config.sub2apiPassword, config.openaiPassword]);
     await setStatus('error', messageText);
     sendResponse({ error: messageText });
   });

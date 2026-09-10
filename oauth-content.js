@@ -126,6 +126,58 @@
     }
   };
 
+  const getAddPhoneForm = () => document.querySelector('form[action*="/add-phone" i]');
+
+  const getAddPhoneInput = (form) => form.querySelector('input[type="tel"], input[name="__reservedForPhoneNumberInput_tel"], input[autocomplete="tel"]');
+
+  const getAddPhoneSmsRadio = (form) => form.querySelector('input[type="radio"][value="sms"]');
+
+  const getAddPhoneSelectedChannel = (form) => {
+    const hidden = form.querySelector('input[type="hidden"][name="channel"]');
+    if (hidden) return String(hidden.value || '').trim().toLowerCase();
+    const radio = document.querySelector('input[type="radio"][name^="segmented-control"]:checked');
+    return String(radio?.value || '').trim().toLowerCase();
+  };
+
+  // 手机号表单提交前必须选中短信渠道：接码平台收不到 WhatsApp 消息。
+  const ensureSmsChannelSelected = (form) => {
+    const smsRadio = getAddPhoneSmsRadio(form);
+    if (!smsRadio) return true;
+    if (getAddPhoneSelectedChannel(form) === 'sms') return true;
+    const label = smsRadio.closest('label');
+    if (!label) return false;
+    label.click();
+    return getAddPhoneSelectedChannel(form) === 'sms';
+  };
+
+  const getAddPhoneErrorText = (form) => {
+    const messages = [];
+    const selectors = [
+      '.react-aria-FieldError',
+      '[slot="errorMessage"]',
+      '[id$="-error"]',
+      '[data-invalid="true"] + *',
+      '[aria-invalid="true"] + *',
+      '[class*="error"]',
+    ];
+    for (const selector of selectors) {
+      form.querySelectorAll(selector).forEach((element) => {
+        const text = String(element?.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text) messages.push(text);
+      });
+    }
+    const invalidInput = form.querySelector('input[aria-invalid="true"], input[data-invalid="true"]');
+    if (invalidInput) {
+      const wrapper = invalidInput.closest('form, [data-rac], div');
+      const text = String(wrapper?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text) messages.push(text);
+    }
+    const preferred = messages.find((text) => (
+      /already|used|linked|eligible|invalid|phone|号码|手机号|错误|失败|try\s+again/i.test(text)
+    ));
+    return preferred || (invalidInput ? (messages[0] || '') : '');
+  };
+
   const clickUseAnotherAccount = () => {
     const pattern = /^(?:use\s+(?:another|a\s+different)\s+account|sign\s*in\s+with\s+(?:another|a\s+different)\s+account|other\s+account|登录至(?:另一个|其他|另一|别的)账户|登陆至(?:另一个|其他|另一|别的)账户|登录(?:其他|另一|别的)账号|登陆(?:其他|另一|别的)账号|使用(?:其他|另一|别的)账号|其他账号|另一账号|别的账号|別(?:の)?アカウント)$/i;
     const candidates = [...document.querySelectorAll('button, a, [role="button"], [role="link"]')];
@@ -155,20 +207,44 @@
     const email = String(payload.email || '').trim();
     const password = String(payload.password || '');
     let attempts = 0;
+    let phoneErrorReported = false;
     const timer = setInterval(async () => {
       attempts += 1;
+      const stopRun = () => {
+        clearInterval(timer);
+        document.documentElement.removeAttribute(RUN_MARK);
+      };
       try {
         if (await fillPendingOneTimeCode()) {
-          clearInterval(timer);
-          document.documentElement.removeAttribute(RUN_MARK);
+          stopRun();
           return;
         }
         if (findOneTimeCodeInputs().length) {
-          clearInterval(timer);
-          document.documentElement.removeAttribute(RUN_MARK);
+          stopRun();
           return;
         }
         if (clickUseAnotherAccount()) {
+          return;
+        }
+        // 手机号表单：号码异常时暂停点击并报错一次，等人工换号后自动恢复；
+        // 号码已输入时先选中短信渠道再提交，未输入号码时不点击。
+        const addPhoneForm = getAddPhoneForm();
+        if (addPhoneForm) {
+          const phoneError = getAddPhoneErrorText(addPhoneForm);
+          if (phoneError) {
+            if (!phoneErrorReported) {
+              phoneErrorReported = true;
+              chrome.runtime.sendMessage({ type: 'REPORT_PHONE_FORM_ERROR', payload: { error: phoneError } }).catch(() => {});
+            }
+            return;
+          }
+          phoneErrorReported = false;
+          const phoneInput = getAddPhoneInput(addPhoneForm);
+          const hasNumber = Boolean(phoneInput && phoneInput.value && phoneInput.value.replace(/\D/g, '').length >= 5);
+          if (hasNumber && ensureSmsChannelSelected(addPhoneForm)) {
+            const submitter = addPhoneForm.querySelector('button[type="submit"], input[type="submit"]');
+            if (submitter && visible(submitter) && !submitter.disabled) submitter.click();
+          }
           return;
         }
         const passwordInput = findPasswordInput();

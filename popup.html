@@ -33,10 +33,50 @@
           <input id="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="粘贴邮箱或短信验证码">
         </section>
       </div>
+      <section class="phone-sms">
+        <h2>手机接码（HeroSMS）</h2>
+        <div class="two-factor-url-field">
+          <input id="hero-sms-api-key" type="password" placeholder="HeroSMS API Key" autocomplete="off" aria-label="HeroSMS API Key">
+          <button id="hero-sms-balance" class="secondary" type="button">余额</button>
+        </div>
+        <div class="actions">
+          <button id="hero-sms-acquire" class="primary" type="button">获取最便宜号码</button>
+        </div>
+        <div id="hero-sms-number" class="phone-sms-result hidden">
+          <div class="phone-sms-result-line">
+            <span class="phone-sms-result-label">号码</span>
+            <span id="hero-sms-number-value" class="phone-sms-result-value"></span>
+            <button id="hero-sms-copy-number" class="secondary" type="button">复制</button>
+          </div>
+          <div id="hero-sms-number-meta" class="phone-sms-result-meta"></div>
+        </div>
+        <div id="hero-sms-code" class="phone-sms-result hidden">
+          <div class="phone-sms-result-line">
+            <span class="phone-sms-result-label">验证码</span>
+            <span id="hero-sms-code-value" class="phone-sms-result-value"></span>
+            <button id="hero-sms-copy-code" class="secondary" type="button">复制</button>
+          </div>
+        </div>
+        <div id="hero-sms-status" class="phone-sms-status"></div>
+        <div class="actions hidden" id="hero-sms-order-actions">
+          <button id="hero-sms-retry" class="primary" type="button">换号重试</button>
+          <button id="hero-sms-finish" class="secondary" type="button">完成订单</button>
+          <button id="hero-sms-cancel" class="secondary" type="button">取消退款</button>
+        </div>
+        <div id="hero-sms-stale-orders" class="phone-sms-result hidden">
+          <div class="phone-sms-result-line">
+            <span id="hero-sms-stale-text" class="phone-sms-result-meta"></span>
+            <button id="hero-sms-stale-retry" class="secondary" type="button">重试取消</button>
+          </div>
+        </div>
+        <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”，未收到可“取消退款”。</p>
+      </section>
       <section class="cpa-config">
         <h2>CPA</h2>
         <label>CPA 地址<input id="cpa-url" type="url" placeholder="https://host/management.html" autocomplete="url"></label>
         <label>CPA 管理密钥<input id="cpa-key" type="password" autocomplete="off"></label>
+        <label>面板 Admin Key（可选）<input id="cpa-admin-key" type="password" autocomplete="off" placeholder="设置100权重时使用，留空则用上面的管理密钥"></label>
+        <p>「设置100权重」经由管理面板校验，若面板 Admin Key 与 CPA 管理密钥不同，请在此单独填写。</p>
       </section>
       <section class="sub2api-config">
         <h2>SUB2API</h2>
@@ -49,6 +89,9 @@
         <label>账号名称（可选）<input id="sub2api-account-name" type="text" placeholder="留空时使用添加日期 YYYY-MM-DD"></label>
         <p>CPA 和 SUB2API 配置可同时保留，请使用对应按钮发起授权。</p>
       </section>
+      <div class="actions hidden" id="cpa-priority-actions">
+        <button id="set-cpa-priority" class="primary" type="button">设置100权重</button>
+      </div>
       <div id="status" class="status status-idle" role="status">等待开始授权。</div>
       <div class="actions">
         <button id="clear-status" class="secondary" type="button">清除状态</button>
@@ -57,6 +100,7 @@
       </div>
     </form>
   </main>
+  <script src="hero-sms.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

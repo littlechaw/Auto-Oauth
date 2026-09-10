@@ -32,3 +32,14 @@ button { border: 0; border-radius: 5px; padding: 9px 12px; color: var(--text); c
 .primary:hover { background: #2688e5; }
 .secondary { background: #303c4f; }
 button:disabled { opacity: .6; cursor: wait; }
+.hidden { display: none !important; }
+.phone-sms { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.phone-sms .actions { margin-top: 0; }
+.phone-sms-status { color: var(--muted); line-height: 1.45; min-height: 18px; }
+.phone-sms-error { color: var(--red); }
+.phone-sms-result { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; display: grid; gap: 6px; }
+.phone-sms-result-line { display: flex; align-items: center; gap: 8px; }
+.phone-sms-result-label { color: var(--muted); font-weight: 600; flex: 0 0 auto; }
+.phone-sms-result-value { font-weight: 650; font-size: 15px; letter-spacing: .5px; }
+.phone-sms-result-line button { padding: 5px 10px; }
+.phone-sms-result-meta { color: var(--muted); font-size: 12px; }
