@@ -16,11 +16,69 @@ function applyConfig(config) {
   }
 }
 
+// ---------- 授权进度 ----------
+const AUTH_PHASE_KEY = 'autoOauthPhase';
+const AUTH_PHASE_STEPS = { request: 0, account: 0, email: 0, password: 0, code: 1, phone: 2, consent: 3, submit: 4, done: 5 };
+let currentPhase = '';
+let currentStatusType = 'idle';
+
+function renderAuthSteps() {
+  const list = $('auth-steps');
+  const index = AUTH_PHASE_STEPS[currentPhase];
+  if (index === undefined || currentStatusType === 'idle') {
+    list.classList.add('hidden');
+    return;
+  }
+  list.classList.remove('hidden');
+  [...list.children].forEach((item, itemIndex) => {
+    if (itemIndex < index) item.className = 'is-done';
+    else if (itemIndex > index) item.className = '';
+    else item.className = currentStatusType === 'error' ? 'is-error' : 'is-current';
+  });
+}
+
 function renderStatus(status = {}) {
   const element = $('status');
   element.textContent = status.message || '等待开始授权。';
   element.className = `status status-${status.type || 'idle'}`;
+  currentStatusType = status.type || 'idle';
+  renderAuthSteps();
 }
+
+// ---------- 分区切换 ----------
+function showTab(name) {
+  const isRun = name === 'run';
+  $('panel-run').classList.toggle('hidden', !isRun);
+  $('panel-settings').classList.toggle('hidden', isRun);
+  $('tab-run').classList.toggle('is-active', isRun);
+  $('tab-settings').classList.toggle('is-active', !isRun);
+  $('tab-run').setAttribute('aria-selected', String(isRun));
+  $('tab-settings').setAttribute('aria-selected', String(!isRun));
+}
+
+$('tab-run').addEventListener('click', () => showTab('run'));
+$('tab-settings').addEventListener('click', () => showTab('settings'));
+
+// ---------- 账号摘要 ----------
+function currentAccountEmail() {
+  return parseOpenAiAccountBundle($('openai-account-bundle').value)?.email || fields.openaiEmail.value.trim();
+}
+
+function renderAccountSummary() {
+  const email = currentAccountEmail();
+  const element = $('account-summary-email');
+  element.textContent = email || '未设置账号';
+  element.classList.toggle('is-empty', !email);
+}
+
+function setAccountEditorOpen(open) {
+  $('account-editor').classList.toggle('hidden', !open);
+  $('toggle-account').textContent = open ? '收起' : '改';
+}
+
+$('toggle-account').addEventListener('click', () => {
+  setAccountEditorOpen($('account-editor').classList.contains('hidden'));
+});
 
 async function saveConfig() {
   await chrome.runtime.sendMessage({ type: 'SAVE_CONFIG', payload: configFromForm() });
@@ -86,6 +144,8 @@ async function applyOpenAiAccountBundle(manual = false) {
   fields.openaiEmail.value = bundle.email;
   fields.openaiPassword.value = bundle.password;
   await saveConfig();
+  renderAccountSummary();
+  if (manual) setAccountEditorOpen(false);
 }
 
 async function refresh() {
@@ -96,6 +156,10 @@ async function refresh() {
   const savedBundle = String(bundleStorage[ACCOUNT_BUNDLE_SESSION_KEY] || '');
   if (savedBundle && !$('openai-account-bundle').value) $('openai-account-bundle').value = savedBundle;
   setTwoFactorUrl(parseOpenAiAccountBundle($('openai-account-bundle').value)?.twoFactorUrl);
+  const phaseStorage = await chrome.storage.local.get(AUTH_PHASE_KEY);
+  currentPhase = phaseStorage[AUTH_PHASE_KEY] || '';
+  renderAccountSummary();
+  if (!currentAccountEmail()) setAccountEditorOpen(true);
   if (!state.run && state.status?.type !== 'idle') {
     await chrome.runtime.sendMessage({ type: 'CLEAR_STATUS' });
     renderStatus({ type: 'idle', message: '等待开始授权。' });
@@ -116,6 +180,10 @@ function notifyPhoneNumberRejected() {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
   if (changes[CPA_PENDING_PATCH_KEY]) syncCpaPriorityButton();
+  if (changes[AUTH_PHASE_KEY]) {
+    currentPhase = changes[AUTH_PHASE_KEY].newValue || '';
+    renderAuthSteps();
+  }
   const status = changes.autoOauthStatus?.newValue;
   if (!status) return;
   if (status.oneTimeCodeRejected) $('one-time-code').value = '';
@@ -175,6 +243,7 @@ $('openai-account-bundle').addEventListener('input', () => {
   if (value) chrome.storage.session.set({ [ACCOUNT_BUNDLE_SESSION_KEY]: value });
   else chrome.storage.session.remove(ACCOUNT_BUNDLE_SESSION_KEY);
   setTwoFactorUrl(parseOpenAiAccountBundle(value)?.twoFactorUrl);
+  renderAccountSummary();
 });
 
 $('parse-account').addEventListener('click', () => {

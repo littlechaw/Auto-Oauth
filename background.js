@@ -2,6 +2,8 @@ const CONFIG_KEY = 'autoOauthConfig';
 const RUN_KEY = 'autoOauthRun';
 const STATUS_KEY = 'autoOauthStatus';
 const CPA_PENDING_PATCH_KEY = 'autoOauthCpaPendingPatch';
+const PHASE_KEY = 'autoOauthPhase';
+const AUTH_PHASES = new Set(['request', 'account', 'email', 'password', 'code', 'phone', 'consent', 'submit', 'done']);
 const ONE_TIME_CODE_KEY = 'autoOauthPendingOneTimeCode';
 const TWO_FACTOR_TAB_IDS_KEY = 'autoOauthPendingTwoFactorTabIds';
 const PENDING_ORIGIN_TAB_KEY = 'autoOauthPendingOriginTab';
@@ -85,6 +87,10 @@ async function setStatus(type, message, extra = {}) {
   const status = { type, message, updatedAt: Date.now(), ...extra };
   await chrome.storage.local.set({ [STATUS_KEY]: status });
   return status;
+}
+
+async function setPhase(phase) {
+  await chrome.storage.local.set({ [PHASE_KEY]: AUTH_PHASES.has(phase) ? phase : '' });
 }
 
 async function closeTwoFactorTabs(returnToOrigin = false) {
@@ -251,6 +257,7 @@ async function startAuthorization(target) {
     ? pendingStorage[TWO_FACTOR_TAB_IDS_KEY].filter((id) => Number.isInteger(id))
     : [];
   const targetName = target === 'cpa' ? 'CPA' : 'SUB';
+  await setPhase('request');
   await setStatus('working', `正在请求 ${targetName} OAuth 授权地址...`);
   const auth = target === 'cpa' ? await requestCpaAuthUrl(config) : await requestSub2ApiAuthUrl(config);
   const tab = await chrome.tabs.create({ url: auth.authUrl, active: true });
@@ -377,12 +384,14 @@ async function finishAuthorization(callbackUrl, tabId) {
   run.twoFactorTabIds = [];
   await chrome.storage.local.set({ [RUN_KEY]: run, [TWO_FACTOR_TAB_IDS_KEY]: [] });
   const config = await getConfig();
+  await setPhase('submit');
   await setStatus('working', '已收到 OAuth 回调，正在提交目标平台...');
   try {
     const message = run.target === 'cpa'
       ? await submitCpaCallback(config, run, callback)
       : await submitSub2ApiCallback(config, run, callback);
     await chrome.storage.local.remove(RUN_KEY);
+    await setPhase('done');
     await setStatus('success', message);
     if (tabId && tabId !== run.originTabId) {
       await chrome.tabs.remove(tabId).catch(() => {});
@@ -552,6 +561,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         return { cleared: false };
       }
+      case 'REPORT_AUTH_PHASE': {
+        const phase = clean(message.payload?.phase);
+        const stored = await chrome.storage.local.get(RUN_KEY);
+        if (!AUTH_PHASES.has(phase) || !stored[RUN_KEY] || stored[RUN_KEY].finalizing) return { ok: false };
+        await setPhase(phase);
+        return { ok: true };
+      }
       case 'REPORT_PHONE_FORM_ERROR': {
         const errorText = clean(message.payload?.error) || '未知错误';
         await setStatus('error', `手机号页面出现错误：${errorText}。已暂停自动操作，清除旧号码并填入新号码后将自动继续。`, { phoneNumberRejected: true });
@@ -576,6 +592,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return { ok: true, name: target.name };
       }
       case 'CLEAR_STATUS':
+        await setPhase('');
         await setStatus('idle', '等待开始授权。');
         return { ok: true };
       default:

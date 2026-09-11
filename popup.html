@@ -11,92 +11,119 @@
     <header>
       <h1>Auto OAuth</h1>
     </header>
+    <nav class="tabs" role="tablist">
+      <button id="tab-run" class="tab is-active" type="button" role="tab" aria-selected="true">授权</button>
+      <button id="tab-settings" class="tab" type="button" role="tab" aria-selected="false">设置</button>
+    </nav>
     <form id="oauth-form">
-      <div class="openai-auth-group">
-        <section class="openai-account openai-account-first">
-          <h2>OpenAI 登录</h2>
-          <label>账号信息
-            <textarea id="openai-account-bundle" rows="3" spellcheck="false" placeholder="邮箱----密码----https://2fa.example/..."></textarea>
+      <section id="panel-run" class="panel">
+        <section class="account-card">
+          <div class="account-summary">
+            <span id="account-summary-email" class="account-summary-email is-empty">未设置账号</span>
+            <button id="toggle-account" class="secondary" type="button">改</button>
+          </div>
+          <div id="account-editor" class="account-editor hidden">
+            <label>账号信息
+              <textarea id="openai-account-bundle" rows="3" spellcheck="false" placeholder="邮箱----密码----https://2fa.example/..."></textarea>
+            </label>
             <div class="field-actions">
               <button id="parse-account" class="secondary" type="button">解析账号信息</button>
             </div>
-          </label>
-          <label>邮箱（可选）<input id="openai-email" type="email" autocomplete="username"></label>
-          <label>密码（可选）<input id="openai-password" type="text" autocomplete="current-password"></label>
+            <details class="manual-fields">
+              <summary>手动填写邮箱 / 密码</summary>
+              <label>邮箱（可选）<input id="openai-email" type="email" autocomplete="username"></label>
+              <label>密码（可选）<input id="openai-password" type="text" autocomplete="current-password"></label>
+            </details>
+          </div>
         </section>
-        <section class="one-time-code">
-          <h2>一次性验证码</h2>
+        <section class="verify-card">
+          <h2>验证码</h2>
+          <input id="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="粘贴邮箱或短信验证码">
           <div class="two-factor-url-field">
             <input id="two-factor-url" type="url" placeholder="2FA 验证码地址" autocomplete="url" aria-label="2FA 验证码地址">
             <button id="open-two-factor-url" class="secondary" type="button" disabled>访问</button>
           </div>
-          <input id="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="粘贴邮箱或短信验证码">
         </section>
-      </div>
-      <section class="phone-sms">
-        <h2>手机接码（HeroSMS）</h2>
-        <div class="two-factor-url-field">
-          <input id="hero-sms-api-key" type="password" placeholder="HeroSMS API Key" autocomplete="off" aria-label="HeroSMS API Key">
-          <button id="hero-sms-balance" class="secondary" type="button">余额</button>
+        <section class="phone-sms">
+          <div class="section-head">
+            <h2>手机接码（HeroSMS）</h2>
+            <button id="hero-sms-balance" class="secondary" type="button">查余额</button>
+          </div>
+          <div class="actions">
+            <button id="hero-sms-acquire" class="primary" type="button">获取最便宜号码</button>
+          </div>
+          <div id="hero-sms-number" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span class="phone-sms-result-label">号码</span>
+              <span id="hero-sms-number-value" class="phone-sms-result-value"></span>
+              <button id="hero-sms-copy-number" class="secondary" type="button">复制</button>
+            </div>
+            <div id="hero-sms-number-meta" class="phone-sms-result-meta"></div>
+          </div>
+          <div id="hero-sms-code" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span class="phone-sms-result-label">验证码</span>
+              <span id="hero-sms-code-value" class="phone-sms-result-value"></span>
+              <button id="hero-sms-copy-code" class="secondary" type="button">复制</button>
+            </div>
+          </div>
+          <div id="hero-sms-status" class="phone-sms-status"></div>
+          <div class="actions hidden" id="hero-sms-order-actions">
+            <button id="hero-sms-retry" class="primary" type="button">换号重试</button>
+            <button id="hero-sms-finish" class="secondary" type="button">完成订单</button>
+            <button id="hero-sms-cancel" class="secondary" type="button">取消退款</button>
+          </div>
+          <div id="hero-sms-stale-orders" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span id="hero-sms-stale-text" class="phone-sms-result-meta"></span>
+              <button id="hero-sms-stale-retry" class="secondary" type="button">重试取消</button>
+            </div>
+          </div>
+          <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”，未收到可“取消退款”。</p>
+        </section>
+      </section>
+      <section id="panel-settings" class="panel hidden">
+        <section class="hero-sms-config">
+          <h2>HeroSMS</h2>
+          <label>API Key<input id="hero-sms-api-key" type="password" placeholder="HeroSMS API Key" autocomplete="off" aria-label="HeroSMS API Key"></label>
+          <p>号码与验证码在“授权”页获取和复制，“查余额”也在该页。</p>
+        </section>
+        <section class="cpa-config">
+          <h2>CPA</h2>
+          <label>CPA 地址<input id="cpa-url" type="url" placeholder="https://host/management.html" autocomplete="url"></label>
+          <label>CPA 管理密钥<input id="cpa-key" type="password" autocomplete="off"></label>
+          <label>面板 Admin Key（可选）<input id="cpa-admin-key" type="password" autocomplete="off" placeholder="设置100权重时使用，留空则用上面的管理密钥"></label>
+          <p>「设置100权重」经由管理面板校验，若面板 Admin Key 与 CPA 管理密钥不同，请在此单独填写。</p>
+        </section>
+        <section class="sub2api-config">
+          <h2>SUB2API</h2>
+          <label>SUB2API 地址<input id="sub2api-url" type="url" placeholder="https://host/admin/accounts" autocomplete="url"></label>
+          <label>管理员邮箱<input id="sub2api-email" type="email" autocomplete="username"></label>
+          <label>管理员密码<input id="sub2api-password" type="password" autocomplete="current-password"></label>
+          <label>目标分组<input id="sub2api-group" type="text" value="codex" placeholder="codex，可用逗号分隔多个分组"></label>
+          <label>默认代理（可选）<input id="sub2api-proxy" type="text" placeholder="SUB2API 中的代理名称"></label>
+          <label>账号优先级<input id="sub2api-priority" type="number" min="1" step="1" value="1"></label>
+          <label>账号名称（可选）<input id="sub2api-account-name" type="text" placeholder="留空时使用添加日期 YYYY-MM-DD"></label>
+          <p>CPA 和 SUB2API 配置可同时保留，请使用“授权”页对应按钮发起授权。</p>
+        </section>
+      </section>
+      <div class="run-bar">
+        <ol id="auth-steps" class="steps hidden">
+          <li>登录</li>
+          <li>验证</li>
+          <li>手机</li>
+          <li>授权</li>
+          <li>提交</li>
+        </ol>
+        <div id="status" class="status status-idle" role="status">等待开始授权。</div>
+        <div class="actions hidden" id="cpa-priority-actions">
+          <button id="set-cpa-priority" class="primary" type="button">设置100权重</button>
         </div>
         <div class="actions">
-          <button id="hero-sms-acquire" class="primary" type="button">获取最便宜号码</button>
+          <button id="clear-status" class="secondary" type="button">清除状态</button>
+          <button id="start-cpa" class="primary" type="button">授权 CPA</button>
+          <button id="start-sub" class="primary" type="button">授权 SUB</button>
         </div>
-        <div id="hero-sms-number" class="phone-sms-result hidden">
-          <div class="phone-sms-result-line">
-            <span class="phone-sms-result-label">号码</span>
-            <span id="hero-sms-number-value" class="phone-sms-result-value"></span>
-            <button id="hero-sms-copy-number" class="secondary" type="button">复制</button>
-          </div>
-          <div id="hero-sms-number-meta" class="phone-sms-result-meta"></div>
-        </div>
-        <div id="hero-sms-code" class="phone-sms-result hidden">
-          <div class="phone-sms-result-line">
-            <span class="phone-sms-result-label">验证码</span>
-            <span id="hero-sms-code-value" class="phone-sms-result-value"></span>
-            <button id="hero-sms-copy-code" class="secondary" type="button">复制</button>
-          </div>
-        </div>
-        <div id="hero-sms-status" class="phone-sms-status"></div>
-        <div class="actions hidden" id="hero-sms-order-actions">
-          <button id="hero-sms-retry" class="primary" type="button">换号重试</button>
-          <button id="hero-sms-finish" class="secondary" type="button">完成订单</button>
-          <button id="hero-sms-cancel" class="secondary" type="button">取消退款</button>
-        </div>
-        <div id="hero-sms-stale-orders" class="phone-sms-result hidden">
-          <div class="phone-sms-result-line">
-            <span id="hero-sms-stale-text" class="phone-sms-result-meta"></span>
-            <button id="hero-sms-stale-retry" class="secondary" type="button">重试取消</button>
-          </div>
-        </div>
-        <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”，未收到可“取消退款”。</p>
-      </section>
-      <section class="cpa-config">
-        <h2>CPA</h2>
-        <label>CPA 地址<input id="cpa-url" type="url" placeholder="https://host/management.html" autocomplete="url"></label>
-        <label>CPA 管理密钥<input id="cpa-key" type="password" autocomplete="off"></label>
-        <label>面板 Admin Key（可选）<input id="cpa-admin-key" type="password" autocomplete="off" placeholder="设置100权重时使用，留空则用上面的管理密钥"></label>
-        <p>「设置100权重」经由管理面板校验，若面板 Admin Key 与 CPA 管理密钥不同，请在此单独填写。</p>
-      </section>
-      <section class="sub2api-config">
-        <h2>SUB2API</h2>
-        <label>SUB2API 地址<input id="sub2api-url" type="url" placeholder="https://host/admin/accounts" autocomplete="url"></label>
-        <label>管理员邮箱<input id="sub2api-email" type="email" autocomplete="username"></label>
-        <label>管理员密码<input id="sub2api-password" type="password" autocomplete="current-password"></label>
-        <label>目标分组<input id="sub2api-group" type="text" value="codex" placeholder="codex，可用逗号分隔多个分组"></label>
-        <label>默认代理（可选）<input id="sub2api-proxy" type="text" placeholder="SUB2API 中的代理名称"></label>
-        <label>账号优先级<input id="sub2api-priority" type="number" min="1" step="1" value="1"></label>
-        <label>账号名称（可选）<input id="sub2api-account-name" type="text" placeholder="留空时使用添加日期 YYYY-MM-DD"></label>
-        <p>CPA 和 SUB2API 配置可同时保留，请使用对应按钮发起授权。</p>
-      </section>
-      <div class="actions hidden" id="cpa-priority-actions">
-        <button id="set-cpa-priority" class="primary" type="button">设置100权重</button>
-      </div>
-      <div id="status" class="status status-idle" role="status">等待开始授权。</div>
-      <div class="actions">
-        <button id="clear-status" class="secondary" type="button">清除状态</button>
-        <button id="start-cpa" class="primary" type="button">授权 CPA</button>
-        <button id="start-sub" class="primary" type="button">授权 SUB</button>
       </div>
     </form>
   </main>

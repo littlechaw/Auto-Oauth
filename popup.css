@@ -1,43 +1,61 @@
 :root { color-scheme: dark; --bg: #121720; --panel: #1b2330; --line: #344154; --text: #edf2f8; --muted: #aab7c7; --blue: #44a3ff; --red: #ff7777; --green: #72d59a; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-main { padding: 16px; }
-header { margin-bottom: 14px; }
+header { padding: 16px 16px 0; }
 h1, h2, p { margin: 0; }
 h1 { font-size: 18px; font-weight: 650; }
-header p, .openai-account p { color: var(--muted); line-height: 1.45; margin-top: 5px; }
-h2 { font-size: 13px; margin-bottom: 10px; }
-section { display: grid; gap: 10px; }
-.openai-auth-group { display: grid; gap: 0; }
+h2 { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
+h2::before { content: ''; flex: 0 0 auto; width: 3px; height: 12px; border-radius: 2px; background: var(--blue); }
+.tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; margin-top: 10px; padding: 10px 16px; background: var(--bg); }
+.tab { flex: 1; background: transparent; color: var(--muted); }
+.tab.is-active { background: var(--panel); color: var(--text); box-shadow: inset 0 -2px 0 var(--blue); }
+.panel { display: grid; gap: 10px; padding: 14px 16px 0; }
+.panel > section { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.panel p { color: var(--muted); line-height: 1.45; }
 label { display: grid; gap: 5px; color: var(--muted); font-weight: 600; }
-input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; background: var(--panel); color: var(--text); outline: none; }
+input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; background: var(--bg); color: var(--text); outline: none; }
 input:focus, textarea:focus { border-color: var(--blue); }
 textarea { resize: vertical; font: inherit; line-height: 1.4; }
 .field-actions { display: flex; justify-content: flex-end; }
 .two-factor-url-field { display: flex; gap: 8px; }
 .two-factor-url-field input { min-width: 0; }
 .two-factor-url-field button { flex: 0 0 auto; }
-.cpa-config, .sub2api-config, .openai-account { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.openai-account-first { margin-top: 0; padding-top: 0; border-top: 0; }
-.one-time-code { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; }
-.check input { width: auto; }
-.status { margin-top: 15px; border-left: 3px solid var(--muted); padding: 9px 10px; background: var(--panel); line-height: 1.4; }
-.status-working, .status-waiting { border-left-color: var(--blue); }
-.status-success { border-left-color: var(--green); }
-.status-error { border-left-color: var(--red); color: #ffc1c1; }
-.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.account-summary { display: flex; align-items: center; gap: 8px; }
+.account-summary-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.account-summary-email.is-empty { color: var(--muted); font-weight: 500; }
+.account-editor { display: grid; gap: 10px; }
+.manual-fields { display: grid; gap: 10px; }
+.manual-fields summary { color: var(--muted); cursor: pointer; font-weight: 600; }
+.manual-fields[open] summary { margin-bottom: 2px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.section-head h2 { margin-bottom: 0; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 button { border: 0; border-radius: 5px; padding: 9px 12px; color: var(--text); cursor: pointer; font-weight: 650; }
 .primary { background: #1976d2; }
 .primary:hover { background: #2688e5; }
 .secondary { background: #303c4f; }
 button:disabled { opacity: .6; cursor: wait; }
 .hidden { display: none !important; }
-.phone-sms { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.status { border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 8px; padding: 9px 10px; background: var(--panel); line-height: 1.4; }
+.status-working, .status-waiting { border-left-color: var(--blue); }
+.status-success { border-left-color: var(--green); }
+.status-error { border-left-color: var(--red); color: #ffc1c1; }
+.steps { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.steps li { flex: 1; display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.steps li::before { content: ''; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #3c4a5e; }
+.steps li.is-done { color: var(--text); }
+.steps li.is-done::before { background: var(--green); }
+.steps li.is-current { color: var(--text); }
+.steps li.is-current::before { background: var(--blue); box-shadow: 0 0 0 3px rgba(68, 163, 255, .22); }
+.steps li.is-error { color: #ffc1c1; }
+.steps li.is-error::before { background: var(--red); box-shadow: 0 0 0 3px rgba(255, 119, 119, .2); }
+.run-bar { position: sticky; bottom: 0; z-index: 2; display: grid; gap: 10px; margin-top: 14px; padding: 10px 16px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+.run-bar .actions { margin-top: 0; }
+.run-bar .primary { flex: 1; }
 .phone-sms .actions { margin-top: 0; }
 .phone-sms-status { color: var(--muted); line-height: 1.45; min-height: 18px; }
 .phone-sms-error { color: var(--red); }
-.phone-sms-result { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; display: grid; gap: 6px; }
+.phone-sms-result { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; display: grid; gap: 6px; }
 .phone-sms-result-line { display: flex; align-items: center; gap: 8px; }
 .phone-sms-result-label { color: var(--muted); font-weight: 600; flex: 0 0 auto; }
 .phone-sms-result-value { font-weight: 650; font-size: 15px; letter-spacing: .5px; }

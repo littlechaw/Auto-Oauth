@@ -208,6 +208,13 @@
     const password = String(payload.password || '');
     let attempts = 0;
     let phoneErrorReported = false;
+    let reportedPhase = '';
+    // 只用于侧边栏进度指示，重复阶段不重复上报。
+    const reportPhase = (phase) => {
+      if (!phase || phase === reportedPhase) return;
+      reportedPhase = phase;
+      chrome.runtime.sendMessage({ type: 'REPORT_AUTH_PHASE', payload: { phase } }).catch(() => {});
+    };
     const timer = setInterval(async () => {
       attempts += 1;
       const stopRun = () => {
@@ -216,20 +223,24 @@
       };
       try {
         if (await fillPendingOneTimeCode()) {
+          reportPhase('code');
           stopRun();
           return;
         }
         if (findOneTimeCodeInputs().length) {
+          reportPhase('code');
           stopRun();
           return;
         }
         if (clickUseAnotherAccount()) {
+          reportPhase('account');
           return;
         }
         // 手机号表单：号码异常时暂停点击并报错一次，等人工换号后自动恢复；
         // 号码已输入时先选中短信渠道再提交，未输入号码时不点击。
         const addPhoneForm = getAddPhoneForm();
         if (addPhoneForm) {
+          reportPhase('phone');
           const phoneError = getAddPhoneErrorText(addPhoneForm);
           if (phoneError) {
             if (!phoneErrorReported) {
@@ -248,18 +259,20 @@
           return;
         }
         const passwordInput = findPasswordInput();
+        if (passwordInput) reportPhase('password');
         if (passwordInput && password && passwordInput.value !== password) {
           setValue(passwordInput, password);
           submitNearestForm(passwordInput);
           return;
         }
         const emailInput = findEmailInput();
+        if (emailInput) reportPhase('email');
         if (emailInput && email && emailInput.value !== email) {
           setValue(emailInput, email);
           submitNearestForm(emailInput);
           return;
         }
-        clickConsent();
+        if (clickConsent()) reportPhase('consent');
       } finally {
         if (attempts >= 180) {
           clearInterval(timer);
