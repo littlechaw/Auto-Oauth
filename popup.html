@@ -46,7 +46,11 @@
             <button id="open-two-factor-url" class="secondary" type="button" disabled>访问</button>
           </div>
         </section>
-        <section class="phone-sms">
+        <div class="phone-sms-provider-switch" role="tablist" aria-label="手机接码平台">
+          <button id="phone-sms-provider-hero" class="secondary is-active" type="button" role="tab" aria-selected="true">HeroSMS</button>
+          <button id="phone-sms-provider-doge" class="secondary" type="button" role="tab" aria-selected="false">DogeSMS</button>
+        </div>
+        <section class="phone-sms phone-sms-provider" data-phone-sms-provider="hero">
           <div class="section-head">
             <h2>手机接码（HeroSMS）</h2>
             <button id="hero-sms-balance" class="secondary" type="button">查余额</button>
@@ -95,7 +99,7 @@
           </div>
           <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”，未收到可“取消退款”。</p>
         </section>
-        <section class="phone-sms">
+        <section class="phone-sms phone-sms-provider hidden" data-phone-sms-provider="doge">
           <div class="section-head">
             <h2>手机接码（DogeSMS）</h2>
             <button id="doge-sms-balance" class="secondary" type="button">查余额</button>

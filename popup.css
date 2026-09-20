@@ -55,6 +55,9 @@ button:disabled { opacity: .6; cursor: wait; }
 .run-bar .actions { margin-top: 0; }
 .run-bar .primary { flex: 1; }
 .phone-sms .actions { margin-top: 0; }
+.phone-sms-provider-switch { display: flex; gap: 6px; }
+.phone-sms-provider-switch button { flex: 1; color: var(--muted); }
+.phone-sms-provider-switch button.is-active { color: var(--text); background: var(--panel); box-shadow: inset 0 -2px 0 var(--blue); }
 .phone-sms-status { color: var(--muted); line-height: 1.45; min-height: 18px; }
 .phone-sms-error { color: var(--red); }
 .phone-sms-result { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; display: grid; gap: 6px; }

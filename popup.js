@@ -700,6 +700,28 @@ const dogeSms = {
   stale: $('doge-sms-stale-orders'), staleText: $('doge-sms-stale-text'), staleRetry: $('doge-sms-stale-retry'),
 };
 
+const phoneSmsProviderButtons = {
+  hero: $('phone-sms-provider-hero'),
+  doge: $('phone-sms-provider-doge'),
+};
+const phoneSmsProviderPanels = [...document.querySelectorAll('[data-phone-sms-provider]')];
+
+function selectPhoneSmsProvider(provider) {
+  const selected = provider === 'doge' ? 'doge' : 'hero';
+  phoneSmsProviderPanels.forEach((panel) => {
+    panel.classList.toggle('hidden', panel.dataset.phoneSmsProvider !== selected);
+  });
+  Object.entries(phoneSmsProviderButtons).forEach(([name, button]) => {
+    const active = name === selected;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
+}
+
+phoneSmsProviderButtons.hero.addEventListener('click', () => selectPhoneSmsProvider('hero'));
+phoneSmsProviderButtons.doge.addEventListener('click', () => selectPhoneSmsProvider('doge'));
+selectPhoneSmsProvider('hero');
+
 async function getDogeSmsConfig() {
   const stored = await chrome.storage.local.get(DOGE_SMS_CONFIG_KEY);
   return { apiKey: '', ...(stored[DOGE_SMS_CONFIG_KEY] || {}) };
