@@ -604,7 +604,7 @@ async function queryPhoneSmsBalance() {
   phoneSms.balance.disabled = true;
   try {
     const balance = await HeroSmsClient.fetchBalance(apiKey);
-    setPhoneSmsStatus(`余额：${balance}`);
+    setPhoneSmsStatus(`余额：${balance} USD`);
   } catch (error) {
     setPhoneSmsStatus(error.message, 'error');
   } finally {
@@ -780,7 +780,10 @@ function renderDogeSmsSession(session) {
   dogeSms.numberValue.textContent = activation.phoneNumber || '等待平台分配…';
   const purchasedAt = session.poll?.startedAt ? new Date(session.poll.startedAt) : null;
   const purchasedText = purchasedAt ? ` · 下单 ${purchasedAt.toTimeString().slice(0, 8)}` : '';
-  dogeSms.numberMeta.textContent = `${activation.countryLabel || ''} · ${activation.serviceLabel || 'OpenAI'} · 参考价 ${formatDogeSmsPrice(activation.priceCents)}${purchasedText}`;
+  const settledPrice = Number(activation.amountCents) > 0
+    ? `成交价 ${formatDogeSmsPrice(activation.amountCents)}`
+    : `参考价 ${formatDogeSmsPrice(activation.priceCents)}`;
+  dogeSms.numberMeta.textContent = `${activation.countryLabel || ''} · ${activation.serviceLabel || 'OpenAI'} · ${settledPrice}${purchasedText}`;
   dogeSms.number.classList.remove('hidden');
   dogeSms.orderActions.classList.toggle('hidden', !hasNumber);
   if (session.poll?.code) {
@@ -888,7 +891,7 @@ async function placeNewDogeSmsNumber(apiKey, countryCode) {
   const priced = await DogeSmsClient.fetchCountryPrice(apiKey, country);
   if (!priced) throw new Error(`${country.label} 当前无可用价格，请切换国家或稍后重试。`);
   setDogeSmsStatus('正在创建订单…');
-  const order = await DogeSmsClient.createOrder(apiKey, country, priced.priceCents);
+  const order = await DogeSmsClient.createOrder(apiKey, country, DogeSmsClient.MAX_PRICE_CENTS);
   const session = {
     activation: {
       orderId: order.orderId,

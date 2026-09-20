@@ -9,6 +9,7 @@
   const CATALOG_SERVICE_CODE = 'openai-chatgpt';
   const SERVICE_CODE = 'openai';
   const SERVICE_LABEL = 'OpenAI';
+  const MAX_PRICE_CENTS = 30;
   const REQUEST_TIMEOUT_MS = 20000;
   const POLL_TIMEOUT_MS = 180000;
   const POLL_INTERVAL_MS = 5000;
@@ -190,6 +191,7 @@
   return {
     SERVICE_CODE,
     SERVICE_LABEL,
+    MAX_PRICE_CENTS,
     COUNTRY_CANDIDATES,
     POLL_TIMEOUT_MS,
     POLL_INTERVAL_MS,
