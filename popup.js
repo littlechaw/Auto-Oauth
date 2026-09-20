@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const ACCOUNT_BUNDLE_SESSION_KEY = 'autoOauthAccountBundle';
+const ACCOUNT_SEPARATOR_SESSION_KEY = 'autoOauthAccountSeparator';
 const fields = {
   cpaUrl: $('cpa-url'), cpaManagementKey: $('cpa-key'), cpaAdminKey: $('cpa-admin-key'), sub2apiUrl: $('sub2api-url'),
   sub2apiEmail: $('sub2api-email'), sub2apiPassword: $('sub2api-password'), sub2apiGroupName: $('sub2api-group'),
@@ -61,7 +62,7 @@ $('tab-settings').addEventListener('click', () => showTab('settings'));
 
 // ---------- 账号摘要 ----------
 function currentAccountEmail() {
-  return parseOpenAiAccountBundle($('openai-account-bundle').value)?.email || fields.openaiEmail.value.trim();
+  return parseOpenAiAccountBundle($('openai-account-bundle').value, $('account-separator').value)?.email || fields.openaiEmail.value.trim();
 }
 
 function renderAccountSummary() {
@@ -84,8 +85,17 @@ async function saveConfig() {
   await chrome.runtime.sendMessage({ type: 'SAVE_CONFIG', payload: configFromForm() });
 }
 
-function parseOpenAiAccountBundle(rawValue) {
+function parseOpenAiAccountBundle(rawValue, customSeparator = '') {
   const raw = String(rawValue || '').trim();
+  const customSep = String(customSeparator || '').trim();
+
+  if (customSep) {
+    const parts = raw.split(customSep).map((part) => part.trim());
+    if (parts.length < 2) return null;
+    const [email, password, twoFactorAddress = ''] = parts;
+    return createOpenAiAccountBundle(email, password, twoFactorAddress);
+  }
+
   const labeledMatch = raw.match(/(?:电子邮件|邮件|邮箱|e-?mail)\s*[:：]\s*(\S+)\s+(?:密码|password|pass)\s*[:：]\s*(\S+)/i);
   if (labeledMatch) return createOpenAiAccountBundle(labeledMatch[1], labeledMatch[2]);
 
@@ -135,7 +145,7 @@ async function openTwoFactorUrl(url) {
 }
 
 async function applyOpenAiAccountBundle(manual = false) {
-  const bundle = parseOpenAiAccountBundle($('openai-account-bundle').value);
+  const bundle = parseOpenAiAccountBundle($('openai-account-bundle').value, $('account-separator').value);
   if (!bundle) {
     if (manual) throw new Error('未识别到有效的邮箱和密码格式。');
     return;
@@ -155,7 +165,9 @@ async function refresh() {
   const bundleStorage = await chrome.storage.session.get(ACCOUNT_BUNDLE_SESSION_KEY);
   const savedBundle = String(bundleStorage[ACCOUNT_BUNDLE_SESSION_KEY] || '');
   if (savedBundle && !$('openai-account-bundle').value) $('openai-account-bundle').value = savedBundle;
-  setTwoFactorUrl(parseOpenAiAccountBundle($('openai-account-bundle').value)?.twoFactorUrl);
+  const separatorStorage = await chrome.storage.session.get(ACCOUNT_SEPARATOR_SESSION_KEY);
+  if (!$('account-separator').value) $('account-separator').value = String(separatorStorage[ACCOUNT_SEPARATOR_SESSION_KEY] || '');
+  setTwoFactorUrl(parseOpenAiAccountBundle($('openai-account-bundle').value, $('account-separator').value)?.twoFactorUrl);
   const phaseStorage = await chrome.storage.local.get(AUTH_PHASE_KEY);
   currentPhase = phaseStorage[AUTH_PHASE_KEY] || '';
   renderAccountSummary();
@@ -242,7 +254,15 @@ $('openai-account-bundle').addEventListener('input', () => {
   const value = $('openai-account-bundle').value;
   if (value) chrome.storage.session.set({ [ACCOUNT_BUNDLE_SESSION_KEY]: value });
   else chrome.storage.session.remove(ACCOUNT_BUNDLE_SESSION_KEY);
-  setTwoFactorUrl(parseOpenAiAccountBundle(value)?.twoFactorUrl);
+  setTwoFactorUrl(parseOpenAiAccountBundle(value, $('account-separator').value)?.twoFactorUrl);
+  renderAccountSummary();
+});
+
+$('account-separator').addEventListener('input', () => {
+  const value = $('account-separator').value;
+  if (value) chrome.storage.session.set({ [ACCOUNT_SEPARATOR_SESSION_KEY]: value });
+  else chrome.storage.session.remove(ACCOUNT_SEPARATOR_SESSION_KEY);
+  setTwoFactorUrl(parseOpenAiAccountBundle($('openai-account-bundle').value, value)?.twoFactorUrl);
   renderAccountSummary();
 });
 
@@ -302,7 +322,7 @@ const PHONE_SMS_SESSION_KEY = 'autoOauthPhoneSmsSession';
 const PHONE_SMS_STALE_ORDERS_KEY = 'autoOauthPhoneSmsStaleOrders';
 
 const phoneSms = {
-  apiKey: $('hero-sms-api-key'), balance: $('hero-sms-balance'), acquire: $('hero-sms-acquire'),
+  apiKey: $('hero-sms-api-key'), country: $('hero-sms-country'), balance: $('hero-sms-balance'), acquire: $('hero-sms-acquire'),
   number: $('hero-sms-number'), numberValue: $('hero-sms-number-value'), numberMeta: $('hero-sms-number-meta'),
   copyNumber: $('hero-sms-copy-number'), code: $('hero-sms-code'), codeValue: $('hero-sms-code-value'),
   copyCode: $('hero-sms-copy-code'), status: $('hero-sms-status'), orderActions: $('hero-sms-order-actions'),
@@ -445,12 +465,11 @@ function startPhoneSmsPolling(session, apiKey) {
 }
 
 // 下单新号码并覆盖会话，返回新 session；不处理旧订单，由调用方先取消。
-async function placeNewPhoneSmsNumber(apiKey) {
-  setPhoneSmsStatus('正在查询各国家价格…');
-  const countries = await HeroSmsClient.fetchCheapestCountries(apiKey);
-  if (!countries.length) throw new Error('候选国家均无可用价格，请稍后重试。');
-  setPhoneSmsStatus('正在获取最便宜号码…');
-  const activation = await HeroSmsClient.acquireCheapestNumber(apiKey, countries);
+async function placeNewPhoneSmsNumber(apiKey, countryId) {
+  const country = HeroSmsClient.COUNTRY_CANDIDATES.find((item) => item.id === Number(countryId));
+  if (!country) throw new Error('请选择有效的国家。');
+  setPhoneSmsStatus(`正在查询 ${country.label} 价格…`);
+  const activation = await HeroSmsClient.acquireNumberForCountry(apiKey, country);
   const session = {
     activation,
     poll: { status: 'polling', startedAt: Date.now(), pollCount: 0, lastStatus: '', code: '' },
@@ -466,9 +485,10 @@ async function acquirePhoneSmsNumber() {
   const config = await getPhoneSmsConfig();
   const apiKey = String(config.apiKey || '').trim();
   if (!apiKey) throw new Error('请先填写 HeroSMS API Key。');
+  const countryId = Number(phoneSms.country.value);
   phoneSms.acquire.disabled = true;
   try {
-    await placeNewPhoneSmsNumber(apiKey);
+    await placeNewPhoneSmsNumber(apiKey, countryId);
   } catch (error) {
     setPhoneSmsStatus(error.message || '获取号码失败。', 'error');
   } finally {
@@ -492,7 +512,7 @@ async function replacePhoneSmsNumber() {
   const apiKey = String(config.apiKey || '').trim();
   if (!apiKey) throw new Error('请先填写 HeroSMS API Key。');
   const session = await getPhoneSmsSession();
-  if (!session?.activation) throw new Error('当前没有已获取的号码，请直接点击“获取最便宜号码”。');
+  if (!session?.activation) throw new Error('当前没有已获取的号码，请直接点击“获取号码”。');
   phoneSms.retry.disabled = true;
   phoneSms.acquire.disabled = true;
   try {
@@ -511,10 +531,10 @@ async function replacePhoneSmsNumber() {
       renderPhoneSmsStaleOrders(stale);
     }
     setPhoneSmsStatus(
-      cancel.ok ? '旧订单已取消退款，正在获取新号码…' : `旧订单暂时无法取消（${cancel.error}），已保留待稍后重试；正在获取新号码…`,
+      cancel.ok ? '旧订单已取消退款，正在同国家获取新号码…' : `旧订单暂时无法取消（${cancel.error}），已保留待稍后重试；正在同国家获取新号码…`,
       cancel.ok ? '' : 'error',
     );
-    await placeNewPhoneSmsNumber(apiKey);
+    await placeNewPhoneSmsNumber(apiKey, session.activation.countryId);
     setPhoneSmsStatus(
       cancel.ok ? '新号码已获取，旧订单已退款。' : `新号码已获取。旧订单未取消：${cancel.error}，可稍后在下方“重试取消”。`,
       cancel.ok ? '' : 'error',
@@ -595,6 +615,7 @@ async function queryPhoneSmsBalance() {
 async function initPhoneSms() {
   const [config, session, stale] = await Promise.all([getPhoneSmsConfig(), getPhoneSmsSession(), getPhoneSmsStaleOrders()]);
   phoneSms.apiKey.value = config.apiKey || '';
+  if (config.countryId) phoneSms.country.value = String(config.countryId);
   renderPhoneSmsStaleOrders(stale);
   if (!session?.activation) return;
   renderPhoneSmsSession(session);
@@ -619,12 +640,16 @@ phoneSms.apiKey.addEventListener('change', () => {
   getPhoneSmsConfig().then((config) => savePhoneSmsConfig({ ...config, apiKey: phoneSms.apiKey.value.trim() })).catch(() => {});
 });
 
+phoneSms.country.addEventListener('change', () => {
+  getPhoneSmsConfig().then((config) => savePhoneSmsConfig({ ...config, countryId: Number(phoneSms.country.value) })).catch(() => {});
+});
+
 phoneSms.balance.addEventListener('click', () => {
   queryPhoneSmsBalance().catch((error) => setPhoneSmsStatus(error.message || '查询余额失败。', 'error'));
 });
 
 phoneSms.acquire.addEventListener('click', () => {
-  // 已有订单时点“获取最便宜号码”等价于换号：先取消旧订单再下单，避免旧订单遗留扣费。
+  // 已有订单时点“获取号码”等价于换号：先取消旧订单再下单，避免旧订单遗留扣费。
   const task = getPhoneSmsSession().then((session) => (
     session?.activation ? replacePhoneSmsNumber() : acquirePhoneSmsNumber()
   ));
@@ -661,5 +686,441 @@ phoneSms.staleRetry.addEventListener('click', () => {
   retryStaleCancellations().catch((error) => setPhoneSmsStatus(error.message || '取消旧订单失败。', 'error'));
 });
 
+// ---------- 手机接码（DogeSMS） ----------
+const DOGE_SMS_CONFIG_KEY = 'autoOauthDogeSmsConfig';
+const DOGE_SMS_SESSION_KEY = 'autoOauthDogeSmsSession';
+const DOGE_SMS_STALE_ORDERS_KEY = 'autoOauthDogeSmsStaleOrders';
+
+const dogeSms = {
+  apiKey: $('doge-sms-api-key'), country: $('doge-sms-country'), balance: $('doge-sms-balance'), acquire: $('doge-sms-acquire'),
+  number: $('doge-sms-number'), numberValue: $('doge-sms-number-value'), numberMeta: $('doge-sms-number-meta'),
+  copyNumber: $('doge-sms-copy-number'), code: $('doge-sms-code'), codeValue: $('doge-sms-code-value'),
+  copyCode: $('doge-sms-copy-code'), status: $('doge-sms-status'), orderActions: $('doge-sms-order-actions'),
+  retry: $('doge-sms-retry'), finish: $('doge-sms-finish'), cancel: $('doge-sms-cancel'),
+  stale: $('doge-sms-stale-orders'), staleText: $('doge-sms-stale-text'), staleRetry: $('doge-sms-stale-retry'),
+};
+
+async function getDogeSmsConfig() {
+  const stored = await chrome.storage.local.get(DOGE_SMS_CONFIG_KEY);
+  return { apiKey: '', ...(stored[DOGE_SMS_CONFIG_KEY] || {}) };
+}
+
+async function saveDogeSmsConfig(config) {
+  await chrome.storage.local.set({ [DOGE_SMS_CONFIG_KEY]: config });
+}
+
+async function getDogeSmsSession() {
+  const stored = await chrome.storage.local.get(DOGE_SMS_SESSION_KEY);
+  return stored[DOGE_SMS_SESSION_KEY] || null;
+}
+
+async function saveDogeSmsSession(session) {
+  await chrome.storage.local.set({ [DOGE_SMS_SESSION_KEY]: session });
+}
+
+async function getDogeSmsStaleOrders() {
+  const stored = await chrome.storage.local.get(DOGE_SMS_STALE_ORDERS_KEY);
+  return Array.isArray(stored[DOGE_SMS_STALE_ORDERS_KEY]) ? stored[DOGE_SMS_STALE_ORDERS_KEY] : [];
+}
+
+async function saveDogeSmsStaleOrders(orders) {
+  await chrome.storage.local.set({ [DOGE_SMS_STALE_ORDERS_KEY]: orders });
+}
+
+function renderDogeSmsStaleOrders(orders) {
+  if (!orders.length) {
+    dogeSms.stale.classList.add('hidden');
+    return;
+  }
+  dogeSms.staleText.textContent = `${orders.length} 个旧订单待取消（平台暂时拒绝取消），可稍后点“重试取消”退款`;
+  dogeSms.stale.classList.remove('hidden');
+}
+
+function setDogeSmsStatus(message = '', kind = '') {
+  dogeSms.status.textContent = message;
+  dogeSms.status.className = `phone-sms-status${kind ? ` phone-sms-${kind}` : ''}`;
+}
+
+function formatDogeSmsPrice(cents) {
+  if (!Number.isFinite(Number(cents))) return '-';
+  return `$${(Number(cents) / 100).toFixed(2)}`;
+}
+
+function renderDogeSmsSession(session) {
+  const activation = session?.activation;
+  if (!activation) {
+    dogeSms.number.classList.add('hidden');
+    dogeSms.code.classList.add('hidden');
+    dogeSms.orderActions.classList.add('hidden');
+    return;
+  }
+  const hasNumber = Boolean(activation.phoneNumber);
+  dogeSms.numberValue.textContent = activation.phoneNumber || '等待平台分配…';
+  const purchasedAt = session.poll?.startedAt ? new Date(session.poll.startedAt) : null;
+  const purchasedText = purchasedAt ? ` · 下单 ${purchasedAt.toTimeString().slice(0, 8)}` : '';
+  dogeSms.numberMeta.textContent = `${activation.countryLabel || ''} · ${activation.serviceLabel || 'OpenAI'} · 参考价 ${formatDogeSmsPrice(activation.priceCents)}${purchasedText}`;
+  dogeSms.number.classList.remove('hidden');
+  dogeSms.orderActions.classList.toggle('hidden', !hasNumber);
+  if (session.poll?.code) {
+    dogeSms.codeValue.textContent = session.poll.code;
+    dogeSms.code.classList.remove('hidden');
+  } else {
+    dogeSms.code.classList.add('hidden');
+  }
+}
+
+function renderDogeSmsPollStatus(session) {
+  const poll = session?.poll || {};
+  const elapsed = poll.startedAt ? Math.max(0, Math.round((Date.now() - poll.startedAt) / 1000)) : 0;
+  const phase = session?.activation?.phoneNumber ? '等待验证码' : '等待号码分配';
+  setDogeSmsStatus(`${phase}… ${elapsed} 秒 / ${poll.pollCount || 0} 次 / 最新状态：${poll.lastStatus || '等待首次查询'}`);
+}
+
+let dogeSmsPollTimer = null;
+let dogeSmsPollBusy = false;
+
+function stopDogeSmsPolling() {
+  if (dogeSmsPollTimer) {
+    clearInterval(dogeSmsPollTimer);
+    dogeSmsPollTimer = null;
+  }
+  dogeSmsPollBusy = false;
+}
+
+function extractDogeSmsCode(order) {
+  const code = String(order?.smsCode || '').trim();
+  if (code) return code;
+  const content = String(order?.smsContent || '').trim();
+  const match = content.match(/\b(\d{4,8})\b/);
+  return match ? match[1] : '';
+}
+
+function startDogeSmsPolling(session, apiKey) {
+  stopDogeSmsPolling();
+  session.poll = { ...session.poll, status: 'polling', startedAt: session.poll.startedAt || Date.now() };
+  dogeSmsPollTimer = setInterval(async () => {
+    if (dogeSmsPollBusy) return;
+    dogeSmsPollBusy = true;
+    try {
+      const order = await DogeSmsClient.fetchOrder(apiKey, session.activation.orderId);
+      session.poll.pollCount += 1;
+      session.poll.lastStatus = order?.status || 'unknown';
+
+      if (order?.status === 'active' && order.phoneNumber && !session.activation.phoneNumber) {
+        session.activation.phoneNumber = order.phoneNumber;
+        session.activation.amountCents = order.amountCents;
+        await saveDogeSmsSession(session);
+        renderDogeSmsSession(session);
+        setDogeSmsStatus(`号码已分配：${order.phoneNumber}，继续等待验证码…`);
+      }
+
+      if (order?.status === 'completed') {
+        const code = extractDogeSmsCode(order);
+        session.poll.status = 'received';
+        session.poll.code = code;
+        if (order.phoneNumber) session.activation.phoneNumber = order.phoneNumber;
+        stopDogeSmsPolling();
+        await saveDogeSmsSession(session);
+        renderDogeSmsSession(session);
+        setDogeSmsStatus(code ? `已收到验证码：${code}。请复制使用，完成后点击“完成订单”。` : '短信已到达，但未能提取验证码，请查看详情。');
+        return;
+      }
+
+      if (['expired', 'failed', 'cancelled'].includes(order?.status)) {
+        stopDogeSmsPolling();
+        session.poll.status = 'error';
+        session.poll.error = order.errorMessage || `订单已${order.status === 'expired' ? '过期' : order.status === 'failed' ? '失败' : '取消'}`;
+        await saveDogeSmsSession(session);
+        renderDogeSmsSession(session);
+        setDogeSmsStatus(session.poll.error, 'error');
+        return;
+      }
+
+      await saveDogeSmsSession(session);
+      renderDogeSmsPollStatus(session);
+      if (Date.now() - session.poll.startedAt >= DogeSmsClient.POLL_TIMEOUT_MS) {
+        stopDogeSmsPolling();
+        session.poll.status = 'timeout';
+        await saveDogeSmsSession(session);
+        renderDogeSmsSession(session);
+        setDogeSmsStatus('轮询超时（3 分钟）未收到验证码。可点击“取消退款”换号重试。', 'error');
+      }
+    } catch (error) {
+      stopDogeSmsPolling();
+      session.poll.status = 'error';
+      session.poll.error = error.message;
+      await saveDogeSmsSession(session);
+      renderDogeSmsSession(session);
+      setDogeSmsStatus(error.message || '轮询出错。', 'error');
+    } finally {
+      dogeSmsPollBusy = false;
+    }
+  }, DogeSmsClient.POLL_INTERVAL_MS);
+}
+
+// 下单新号码并覆盖会话，返回新 session；不处理旧订单，由调用方先取消。
+async function placeNewDogeSmsNumber(apiKey, countryCode) {
+  const country = DogeSmsClient.COUNTRY_CANDIDATES.find((item) => item.code === countryCode);
+  if (!country) throw new Error('请选择有效的国家。');
+  setDogeSmsStatus(`正在查询 ${country.label} 价格…`);
+  const priced = await DogeSmsClient.fetchCountryPrice(apiKey, country);
+  if (!priced) throw new Error(`${country.label} 当前无可用价格，请切换国家或稍后重试。`);
+  setDogeSmsStatus('正在创建订单…');
+  const order = await DogeSmsClient.createOrder(apiKey, country, priced.priceCents);
+  const session = {
+    activation: {
+      orderId: order.orderId,
+      orderNo: order.orderNo,
+      countryCode: country.code,
+      countryLabel: country.label,
+      serviceCode: DogeSmsClient.SERVICE_CODE,
+      serviceLabel: DogeSmsClient.SERVICE_LABEL,
+      priceCents: priced.priceCents,
+      phoneNumber: order.phoneNumber || '',
+      amountCents: order.amountCents,
+      currency: order.currency,
+    },
+    poll: { status: 'polling', startedAt: Date.now(), pollCount: 0, lastStatus: order.status || 'pending', code: '' },
+  };
+  await saveDogeSmsSession(session);
+  renderDogeSmsSession(session);
+  setDogeSmsStatus(order.phoneNumber ? '号码已获取，开始轮询验证码…' : '订单已创建，等待平台分配号码…');
+  startDogeSmsPolling(session, apiKey);
+  return session;
+}
+
+async function acquireDogeSmsNumber() {
+  const config = await getDogeSmsConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  if (!apiKey) throw new Error('请先填写 DogeSMS API Key。');
+  const countryCode = dogeSms.country.value;
+  dogeSms.acquire.disabled = true;
+  try {
+    await placeNewDogeSmsNumber(apiKey, countryCode);
+  } catch (error) {
+    setDogeSmsStatus(error.message || '获取号码失败。', 'error');
+  } finally {
+    dogeSms.acquire.disabled = false;
+  }
+}
+
+// 取消当前订单，返回 { ok, error }。
+async function cancelDogeSmsOrder(session, apiKey) {
+  try {
+    await DogeSmsClient.cancelOrder(apiKey, session.activation.orderId);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+// 换号重试：先取消旧订单（被拒则记入待取消列表），再同国家下单新号码。
+async function replaceDogeSmsNumber() {
+  const config = await getDogeSmsConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  if (!apiKey) throw new Error('请先填写 DogeSMS API Key。');
+  const session = await getDogeSmsSession();
+  if (!session?.activation) throw new Error('当前没有已获取的号码，请直接点击“获取号码”。');
+  dogeSms.retry.disabled = true;
+  dogeSms.acquire.disabled = true;
+  try {
+    stopDogeSmsPolling();
+    const cancel = await cancelDogeSmsOrder(session, apiKey);
+    if (!cancel.ok) {
+      const stale = await getDogeSmsStaleOrders();
+      stale.push({
+        orderId: session.activation.orderId,
+        phoneNumber: session.activation.phoneNumber || '',
+        countryLabel: session.activation.countryLabel || '',
+        error: cancel.error,
+        attemptedAt: Date.now(),
+      });
+      await saveDogeSmsStaleOrders(stale);
+      renderDogeSmsStaleOrders(stale);
+    }
+    setDogeSmsStatus(
+      cancel.ok ? '旧订单已取消，正在同国家获取新号码…' : `旧订单暂时无法取消（${cancel.error}），已保留待稍后重试；正在同国家获取新号码…`,
+      cancel.ok ? '' : 'error',
+    );
+    await placeNewDogeSmsNumber(apiKey, session.activation.countryCode);
+    setDogeSmsStatus(
+      cancel.ok ? '新号码已获取，旧订单已取消。' : `新订单已创建。旧订单未取消：${cancel.error}，可稍后在下方“重试取消”。`,
+      cancel.ok ? '' : 'error',
+    );
+    chrome.runtime.sendMessage({ type: 'RESTART_PAGE_AUTOMATION' }).catch(() => {});
+  } catch (error) {
+    setDogeSmsStatus(error.message || '换号失败。', 'error');
+  } finally {
+    dogeSms.retry.disabled = false;
+    dogeSms.acquire.disabled = false;
+  }
+}
+
+// 重试取消待取消的旧订单。
+async function retryDogeStaleCancellations() {
+  const config = await getDogeSmsConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  if (!apiKey) throw new Error('请先填写 DogeSMS API Key。');
+  const orders = await getDogeSmsStaleOrders();
+  if (!orders.length) return;
+  dogeSms.staleRetry.disabled = true;
+  try {
+    const remaining = [];
+    for (const order of orders) {
+      try {
+        await DogeSmsClient.cancelOrder(apiKey, order.orderId);
+      } catch (error) {
+        order.error = error.message;
+        order.attemptedAt = Date.now();
+        remaining.push(order);
+      }
+    }
+    await saveDogeSmsStaleOrders(remaining);
+    renderDogeSmsStaleOrders(remaining);
+    setDogeSmsStatus(
+      remaining.length ? `仍有 ${remaining.length} 个旧订单取消失败：${remaining[0].error}` : '所有旧订单均已取消退款。',
+      remaining.length ? 'error' : '',
+    );
+  } finally {
+    dogeSms.staleRetry.disabled = false;
+  }
+}
+
+async function finishDogeSmsOrder(label) {
+  const session = await getDogeSmsSession();
+  if (!session?.activation) return;
+  stopDogeSmsPolling();
+  await chrome.storage.local.remove(DOGE_SMS_SESSION_KEY);
+  renderDogeSmsSession(null);
+  setDogeSmsStatus(`${label}完成。`);
+}
+
+async function cancelDogeSmsRefund() {
+  const session = await getDogeSmsSession();
+  if (!session?.activation) return;
+  stopDogeSmsPolling();
+  const config = await getDogeSmsConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  try {
+    if (apiKey) {
+      const order = await DogeSmsClient.cancelOrder(apiKey, session.activation.orderId);
+      if (order?.status === 'completed') {
+        setDogeSmsStatus('订单已完成（验证码已送达），无法退款。', 'error');
+        return;
+      }
+    }
+  } catch (error) {
+    if (/CANCEL_TOO_EARLY/i.test(error.message)) {
+      const stale = await getDogeSmsStaleOrders();
+      stale.push({
+        orderId: session.activation.orderId,
+        phoneNumber: session.activation.phoneNumber || '',
+        countryLabel: session.activation.countryLabel || '',
+        error: error.message,
+        attemptedAt: Date.now(),
+      });
+      await saveDogeSmsStaleOrders(stale);
+      renderDogeSmsStaleOrders(stale);
+      setDogeSmsStatus(`${error.message}，已加入“重试取消”列表。`, 'error');
+      return;
+    }
+    renderDogeSmsSession(session);
+    setDogeSmsStatus(error.message || '取消退款失败。', 'error');
+    return;
+  }
+  await chrome.storage.local.remove(DOGE_SMS_SESSION_KEY);
+  renderDogeSmsSession(null);
+  setDogeSmsStatus('退款完成。');
+}
+
+async function queryDogeSmsBalance() {
+  const config = await getDogeSmsConfig();
+  const apiKey = String(config.apiKey || '').trim();
+  if (!apiKey) throw new Error('请先填写 DogeSMS API Key。');
+  dogeSms.balance.disabled = true;
+  try {
+    const { balanceCents, currency } = await DogeSmsClient.fetchBalance(apiKey);
+    setDogeSmsStatus(`余额：${formatDogeSmsPrice(balanceCents)} ${currency}`);
+  } catch (error) {
+    setDogeSmsStatus(error.message, 'error');
+  } finally {
+    dogeSms.balance.disabled = false;
+  }
+}
+
+async function initDogeSms() {
+  const [config, session, stale] = await Promise.all([getDogeSmsConfig(), getDogeSmsSession(), getDogeSmsStaleOrders()]);
+  dogeSms.apiKey.value = config.apiKey || '';
+  if (config.countryCode) dogeSms.country.value = String(config.countryCode);
+  renderDogeSmsStaleOrders(stale);
+  if (!session?.activation) return;
+  renderDogeSmsSession(session);
+  const apiKey = String(config.apiKey || '').trim();
+  if (session.poll?.status === 'polling') {
+    if (apiKey) {
+      renderDogeSmsPollStatus(session);
+      startDogeSmsPolling(session, apiKey);
+    } else {
+      setDogeSmsStatus('轮询已暂停：缺少 DogeSMS API Key。', 'error');
+    }
+  } else if (session.poll?.status === 'received') {
+    setDogeSmsStatus(`已收到验证码：${session.poll.code}。请复制使用，完成后点击“完成订单”。`);
+  } else if (session.poll?.status === 'timeout') {
+    setDogeSmsStatus('轮询超时（3 分钟）未收到验证码。可点击“取消退款”换号重试。', 'error');
+  } else if (session.poll?.status === 'error') {
+    setDogeSmsStatus(session.poll.error || '轮询出错。', 'error');
+  }
+}
+
+dogeSms.apiKey.addEventListener('change', () => {
+  getDogeSmsConfig().then((config) => saveDogeSmsConfig({ ...config, apiKey: dogeSms.apiKey.value.trim() })).catch(() => {});
+});
+
+dogeSms.country.addEventListener('change', () => {
+  getDogeSmsConfig().then((config) => saveDogeSmsConfig({ ...config, countryCode: dogeSms.country.value })).catch(() => {});
+});
+
+dogeSms.balance.addEventListener('click', () => {
+  queryDogeSmsBalance().catch((error) => setDogeSmsStatus(error.message || '查询余额失败。', 'error'));
+});
+
+dogeSms.acquire.addEventListener('click', () => {
+  const task = getDogeSmsSession().then((session) => (
+    session?.activation ? replaceDogeSmsNumber() : acquireDogeSmsNumber()
+  ));
+  task.catch((error) => setDogeSmsStatus(error.message || '获取号码失败。', 'error'));
+});
+
+dogeSms.copyNumber.addEventListener('click', () => {
+  getDogeSmsSession().then((session) => {
+    if (!session?.activation?.phoneNumber) return;
+    copyPhoneSmsText(session.activation.phoneNumber).then(() => setDogeSmsStatus('号码已复制。'));
+  }).catch(() => {});
+});
+
+dogeSms.copyCode.addEventListener('click', () => {
+  getDogeSmsSession().then((session) => {
+    if (!session?.poll?.code) return;
+    copyPhoneSmsText(session.poll.code).then(() => setDogeSmsStatus('验证码已复制。'));
+  }).catch(() => {});
+});
+
+dogeSms.finish.addEventListener('click', () => {
+  finishDogeSmsOrder('订单').catch((error) => setDogeSmsStatus(error.message, 'error'));
+});
+
+dogeSms.cancel.addEventListener('click', () => {
+  cancelDogeSmsRefund().catch((error) => setDogeSmsStatus(error.message, 'error'));
+});
+
+dogeSms.retry.addEventListener('click', () => {
+  replaceDogeSmsNumber().catch((error) => setDogeSmsStatus(error.message || '换号失败。', 'error'));
+});
+
+dogeSms.staleRetry.addEventListener('click', () => {
+  retryDogeStaleCancellations().catch((error) => setDogeSmsStatus(error.message || '取消旧订单失败。', 'error'));
+});
+
 refresh().catch((error) => renderStatus({ type: 'error', message: error.message || '无法读取配置。' }));
 initPhoneSms().catch(() => {});
+initDogeSms().catch(() => {});

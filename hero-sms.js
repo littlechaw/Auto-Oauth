@@ -14,14 +14,14 @@
 
   // 国家候选池：ID 与 FlowPilot COUNTRY_BY_PHONE_PREFIX 保持一致（平台已验证）。
   const COUNTRY_CANDIDATES = Object.freeze([
+    { id: 187, label: '美国' },
+    { id: 16, label: '英国' },
     { id: 10, label: '越南' },
     { id: 52, label: '泰国' },
     { id: 6, label: '印度尼西亚' },
-    { id: 16, label: '英国' },
     { id: 151, label: '日本' },
     { id: 43, label: '德国' },
     { id: 73, label: '法国' },
-    { id: 187, label: '美国' },
   ]);
 
   function parsePayload(text) {
@@ -235,6 +235,21 @@
     throw lastError || new Error('获取手机号失败：候选国家均无可用号码。');
   }
 
+  // 针对指定国家查询价格并下单。
+  async function acquireNumberForCountry(apiKey, country) {
+    const priced = await fetchCountryPrice(apiKey, country);
+    if (!priced) throw new Error(`${country.label} 当前无可用价格或库存，请切换国家或稍后重试。`);
+    const payload = await requestActivation(apiKey, country, priced.price);
+    const activation = parseActivation(payload);
+    if (!activation) throw new Error(`获取手机号失败：${describePayload(payload) || '空响应'}`);
+    return {
+      ...activation,
+      countryId: country.id,
+      countryLabel: country.label,
+      price: priced.price,
+    };
+  }
+
   function extractVerificationCode(rawCode) {
     const trimmed = String(rawCode || '').trim();
     if (!trimmed) return '';
@@ -284,6 +299,7 @@
     fetchBalance,
     fetchCheapestCountries,
     acquireCheapestNumber,
+    acquireNumberForCountry,
     fetchActivationStatus,
     setActivationStatus,
     // 状态码：3 = 请求再次发送短信，6 = 完成订单，8 = 取消并退款。

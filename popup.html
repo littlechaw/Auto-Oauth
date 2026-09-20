@@ -26,14 +26,16 @@
             <label>账号信息
               <textarea id="openai-account-bundle" rows="3" spellcheck="false" placeholder="邮箱----密码----https://2fa.example/..."></textarea>
             </label>
+            <label>分隔符（可选）
+              <input id="account-separator" type="text" placeholder="如 ---- 或 |，留空则自动识别分隔符" autocomplete="off" aria-label="账号分隔符">
+            </label>
             <div class="field-actions">
               <button id="parse-account" class="secondary" type="button">解析账号信息</button>
             </div>
-            <details class="manual-fields">
-              <summary>手动填写邮箱 / 密码</summary>
+            <div class="manual-fields">
               <label>邮箱（可选）<input id="openai-email" type="email" autocomplete="username"></label>
               <label>密码（可选）<input id="openai-password" type="text" autocomplete="current-password"></label>
-            </details>
+            </div>
           </div>
         </section>
         <section class="verify-card">
@@ -49,8 +51,20 @@
             <h2>手机接码（HeroSMS）</h2>
             <button id="hero-sms-balance" class="secondary" type="button">查余额</button>
           </div>
+          <label>国家
+            <select id="hero-sms-country">
+              <option value="187" selected>美国</option>
+              <option value="16">英国</option>
+              <option value="10">越南</option>
+              <option value="52">泰国</option>
+              <option value="6">印度尼西亚</option>
+              <option value="151">日本</option>
+              <option value="43">德国</option>
+              <option value="73">法国</option>
+            </select>
+          </label>
           <div class="actions">
-            <button id="hero-sms-acquire" class="primary" type="button">获取最便宜号码</button>
+            <button id="hero-sms-acquire" class="primary" type="button">获取号码</button>
           </div>
           <div id="hero-sms-number" class="phone-sms-result hidden">
             <div class="phone-sms-result-line">
@@ -81,11 +95,65 @@
           </div>
           <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”，未收到可“取消退款”。</p>
         </section>
+        <section class="phone-sms">
+          <div class="section-head">
+            <h2>手机接码（DogeSMS）</h2>
+            <button id="doge-sms-balance" class="secondary" type="button">查余额</button>
+          </div>
+          <label>国家
+            <select id="doge-sms-country">
+              <option value="US" selected>美国</option>
+              <option value="GB">英国</option>
+              <option value="VN">越南</option>
+              <option value="TH">泰国</option>
+              <option value="ID">印度尼西亚</option>
+              <option value="JP">日本</option>
+              <option value="DE">德国</option>
+              <option value="FR">法国</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button id="doge-sms-acquire" class="primary" type="button">获取号码</button>
+          </div>
+          <div id="doge-sms-number" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span class="phone-sms-result-label">号码</span>
+              <span id="doge-sms-number-value" class="phone-sms-result-value"></span>
+              <button id="doge-sms-copy-number" class="secondary" type="button">复制</button>
+            </div>
+            <div id="doge-sms-number-meta" class="phone-sms-result-meta"></div>
+          </div>
+          <div id="doge-sms-code" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span class="phone-sms-result-label">验证码</span>
+              <span id="doge-sms-code-value" class="phone-sms-result-value"></span>
+              <button id="doge-sms-copy-code" class="secondary" type="button">复制</button>
+            </div>
+          </div>
+          <div id="doge-sms-status" class="phone-sms-status"></div>
+          <div class="actions hidden" id="doge-sms-order-actions">
+            <button id="doge-sms-retry" class="primary" type="button">换号重试</button>
+            <button id="doge-sms-finish" class="secondary" type="button">完成订单</button>
+            <button id="doge-sms-cancel" class="secondary" type="button">取消退款</button>
+          </div>
+          <div id="doge-sms-stale-orders" class="phone-sms-result hidden">
+            <div class="phone-sms-result-line">
+              <span id="doge-sms-stale-text" class="phone-sms-result-meta"></span>
+              <button id="doge-sms-stale-retry" class="secondary" type="button">重试取消</button>
+            </div>
+          </div>
+          <p>手动模式：号码与验证码请自行复制使用；轮询期间请保持侧边栏打开。收到验证码后请点“完成订单”（仅清空本地记录），未收到可“取消退款”。</p>
+        </section>
       </section>
       <section id="panel-settings" class="panel hidden">
         <section class="hero-sms-config">
           <h2>HeroSMS</h2>
           <label>API Key<input id="hero-sms-api-key" type="password" placeholder="HeroSMS API Key" autocomplete="off" aria-label="HeroSMS API Key"></label>
+          <p>号码与验证码在“授权”页获取和复制，“查余额”也在该页。</p>
+        </section>
+        <section class="doge-sms-config">
+          <h2>DogeSMS</h2>
+          <label>API Key<input id="doge-sms-api-key" type="password" placeholder="DogeSMS API Key" autocomplete="off" aria-label="DogeSMS API Key"></label>
           <p>号码与验证码在“授权”页获取和复制，“查余额”也在该页。</p>
         </section>
         <section class="cpa-config">
@@ -128,6 +196,7 @@
     </form>
   </main>
   <script src="hero-sms.js"></script>
+  <script src="doge-sms.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

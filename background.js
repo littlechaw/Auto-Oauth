@@ -595,6 +595,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         await setPhase('');
         await setStatus('idle', '等待开始授权。');
         return { ok: true };
+      case 'DOGESMS_REQUEST': {
+        // DogeSMS API 明确声明不服务浏览器跨域请求，因此所有请求必须在 background 中发出。
+        const { url, method, headers, body, timeoutMs } = message.payload || {};
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs || 20000);
+        try {
+          const requestBody = body !== undefined ? JSON.stringify(body) : undefined;
+          const response = await fetch(url, {
+            method: method || 'GET',
+            headers: {
+              Origin: 'https://www.dogesms.com',
+              Referer: 'https://www.dogesms.com/',
+              ...(headers || {}),
+            },
+            ...(requestBody !== undefined ? { body: requestBody } : {}),
+            signal: controller.signal,
+          });
+          const text = await response.text();
+          return { ok: response.ok, status: response.status, text };
+        } catch (error) {
+          if (error?.name === 'AbortError') throw new Error('DogeSMS 请求超时，请检查网络后重试。');
+          throw error;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
       default:
         throw new Error('不支持的请求。');
     }

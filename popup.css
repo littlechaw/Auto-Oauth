@@ -13,9 +13,11 @@ h2::before { content: ''; flex: 0 0 auto; width: 3px; height: 12px; border-radiu
 .panel > section { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .panel p { color: var(--muted); line-height: 1.45; }
 label { display: grid; gap: 5px; color: var(--muted); font-weight: 600; }
-input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; background: var(--bg); color: var(--text); outline: none; }
-input:focus, textarea:focus { border-color: var(--blue); }
-textarea { resize: vertical; font: inherit; line-height: 1.4; }
+input, textarea, select { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 9px 10px; background: var(--bg); color: var(--text); outline: none; font: inherit; }
+input:focus, textarea:focus, select:focus { border-color: var(--blue); }
+textarea { resize: vertical; line-height: 1.4; }
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23aab7c7' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; cursor: pointer; }
+select option { background: var(--bg); color: var(--text); }
 .field-actions { display: flex; justify-content: flex-end; }
 .two-factor-url-field { display: flex; gap: 8px; }
 .two-factor-url-field input { min-width: 0; }
